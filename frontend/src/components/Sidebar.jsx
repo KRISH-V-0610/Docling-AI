@@ -50,7 +50,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                         className="w-10 h-10 rounded-[var(--radius-md)] object-cover shadow-sm shrink-0 bg-[#fdfceb]"
                     />
                     <span className={cn(
-                        "text-[#fdfceb] font-extrabold text-4xl tracking-tighter font-karla my-2 mb-2 whitespace-nowrap transition-opacity duration-200",
+                        "text-[#fdfceb] font-extrabold text-4xl tracking-tighter font-karla my-2 mr-4  mb-2 whitespace-nowrap transition-opacity duration-200",
                         isOpen ? "opacity-100" : "opacity-0 hidden"
                     )}>
                         Docling
@@ -109,13 +109,15 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                                 {user?.username || 'Profile'}
                             </span>
                         </NavLink>
-                        <button
+
+                        {isOpen && <button
                             onClick={logout}
                             className="flex items-center justify-center p-2.5 rounded-[var(--radius-md)] text-white/70 hover:bg-red-500/20 hover:text-red-300 transition-colors shrink-0"
                             title="Log Out"
                         >
                             <LogOut className="w-5 h-5 shrink-0" />
                         </button>
+                        }
                     </div>
                 ) : (
                     <NavLink

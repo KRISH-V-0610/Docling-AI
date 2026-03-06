@@ -11,6 +11,7 @@ import { Profile } from './pages/Profile';
 import { Landing } from './pages/Landing';
 import { History } from './pages/History';
 import { ProjectWorkspace } from './pages/ProjectWorkspace';
+import { Process } from './pages/Process';
 import useAuthStore from './store/useAuthStore';
 
 function PlaceholderPage({ title }) {
@@ -92,6 +93,7 @@ function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/history" element={<History />} />
             <Route path="/project/:id" element={<ProjectWorkspace />} />
+            <Route path="/process" element={<Process />} />
           </Route>
         </Route>
 

@@ -18,6 +18,12 @@ const useAppStore = create((set) => ({
     llmEngine: 'meta-llama/llama-4-maverick-17b-128e-instruct',
     setLlmEngine: (engine) => set({ llmEngine: engine }),
 
+    // Reconstruct context (project to write result back to)
+    reconstructProjectId: null,
+    setReconstructProjectId: (id) => set({ reconstructProjectId: id }),
+    reconstructSourceFileName: '',
+    setReconstructSourceFileName: (name) => set({ reconstructSourceFileName: name }),
+
     // Agent Status (Pending, Running, Done)
     agents: {
         parse: { status: 'Pending', progress: 0 },
