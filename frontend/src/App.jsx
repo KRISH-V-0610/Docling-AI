@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { ToastProvider } from './components/Toasts';
+import ChatBot from './components/ChatBot';
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
@@ -17,6 +18,7 @@ import { Profile } from './pages/Profile';
 import { Landing } from './pages/Landing';
 import { History } from './pages/History';
 import { ProjectWorkspace } from './pages/ProjectWorkspace';
+import Workshop from './pages/Workshop';
 import useAuthStore from './store/useAuthStore';
 
 function PlaceholderPage({ title }) {
@@ -104,11 +106,13 @@ function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/history" element={<History />} />
             <Route path="/project/:id" element={<ProjectWorkspace />} />
+            <Route path="/workshop" element={<Workshop />} />
           </Route>
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <ChatBot />
     </ToastProvider>
   );
 }

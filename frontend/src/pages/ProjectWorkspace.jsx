@@ -9,7 +9,7 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import MDEditor from '@uiw/react-md-editor';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/projects';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/projects';
 
 export function ProjectWorkspace() {
     const { id } = useParams();
