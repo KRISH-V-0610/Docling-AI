@@ -10,6 +10,8 @@ import {
     deleteProject,
     renameProjectFile,
     deleteProjectFile,
+    updateValidationReport,
+    downloadDocx,
     uploadMiddleware
 } from '../controllers/projectController.js';
 import { protectRoute } from '../middleware/authMiddleware.js';
@@ -29,6 +31,8 @@ router.delete('/:id', deleteProject);
 router.post('/:id/files', uploadMiddleware.single('file'), uploadProjectFile);
 router.put('/:id/files/:fileId/rename', renameProjectFile);
 router.put('/:id/files/:fileId', updateProjectFileContent);
+router.post('/:id/files/:fileId/download-docx', downloadDocx);
+router.put('/:id/files/:fileId/report', updateValidationReport);
 router.delete('/:id/files/:fileId', deleteProjectFile);
 
 export default router;

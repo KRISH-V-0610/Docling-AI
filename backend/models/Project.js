@@ -6,6 +6,7 @@ const fileSchema = new mongoose.Schema({
     mimeType: { type: String, required: true },
     size: { type: Number },
     content: { type: String, default: '' }, // For parsed text/md to show in web editor
+    validationReport: { type: Array, default: [] }, // Stores spelling errors or formatting validation issues
 }, { timestamps: true });
 
 const projectSchema = new mongoose.Schema(

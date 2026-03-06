@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocBot Interactive Editor</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            background: #f0f2f5;
+            color: #333;
+        }
+
+        /* Sidebar (Chat & Files) */
+        #sidebar {
+            width: 380px;
+            background: white;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+            z-index: 10;
+        }
+
+        .section-header {
+            font-size: 15px;
+            padding: 15px 20px;
+            margin: 0;
+            background: #fafafa;
+            border-bottom: 1px solid #ddd;
+            color: #555;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Files Section */
+        #files-section {
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+            background: #fff;
+        }
+
+        .upload-btn-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .upload-btn {
+            border: 1px dashed #1890ff;
+            color: #1890ff;
+            background-color: transparent;
+            padding: 8px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            width: 100%;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .upload-btn-wrapper:hover .upload-btn {
+            background-color: #e6f7ff;
+        }
+
+        .upload-btn-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+            height: 100%;
+        }
+
+        #file-list {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0 0 0;
+            font-size: 14px;
+            max-height: 160px;
+            overflow-y: auto;
+        }
+
+        #file-list li {
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+        }
+
+        #file-list li:before {
+            content: "📄";
+            margin-right: 8px;
+            font-size: 12px;
+        }
+
+        #file-list li:hover {
+            background: #f5f5f5;
+        }
+
+        #file-list li.selected {
+            background: #e6f7ff;
+            color: #1890ff;
+            font-weight: 600;
+            border-left: 3px solid #1890ff;
+        }
+
+        /* Chat Section */
+        #chat-history {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background: #fafafa;
+        }
+
+        .msg-wrapper {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .msg {
+            max-width: 85%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+            word-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .user-msg-wrapper {
+            align-items: flex-end;
+        }
+
+        .user-msg {
+            background: #1890ff;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .bot-msg-wrapper {
+            align-items: flex-start;
+        }
+
+        .bot-msg {
+            background: #fff;
+            color: #333;
+            border: 1px solid #eaeaea;
+            border-bottom-left-radius: 4px;
+        }
+
+        .msg-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+            margin-bottom: 8px;
+        }
+
+        #chat-input-area {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid #ddd;
+            background: #fff;
+            gap: 10px;
+        }
+
+        #chat-input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            outline: none;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        #chat-input:focus {
+            border-color: #1890ff;
+        }
+
+        #send-btn {
+            padding: 0 20px;
+            background: #1890ff;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        #send-btn:hover {
+            background: #096dd9;
+        }
+
+        #send-btn:disabled {
+            background: #bae0ff;
+            cursor: not-allowed;
+        }
+
+        /* Loading Dots */
+        .typing-indicator span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background-color: #999;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .typing-indicator span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+            }
+
+            40% {
+                transform: scale(1);
+            }
+        }
+
+        /* Main/Preview Section */
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 30px;
+            background: #f0f2f5;
+        }
+
+        #preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        #preview-title {
+            font-size: 18px;
+            margin: 0;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+        }
+
+        #current-file-name {
+            font-weight: normal;
+            color: #666;
+            margin-left: 10px;
+            font-size: 16px;
+        }
+
+        #preview-actions button {
+            padding: 8px 16px;
+            border: 1px solid #d9d9d9;
+            background: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        #preview-actions button:hover {
+            color: #1890ff;
+            border-color: #1890ff;
+        }
+
+        #preview-content {
+            flex: 1;
+            border: none;
+            border-radius: 8px;
+            padding: 40px;
+            overflow-y: auto;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+
+            /* Standard Document Width */
+            max-width: 850px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .empty-state {
+            color: #999;
+            text-align: center;
+            margin-top: 100px;
+            font-size: 16px;
+        }
+
+        .empty-state span {
+            display: block;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="sidebar">
+        <!-- Files -->
+        <h2 class="section-header">
+            <span>Documents Library</span>
+        </h2>
+        <div id="files-section">
+            <div class="upload-btn-wrapper">
+                <button class="upload-btn">Upload .docx File</button>
+                <input type="file" id="file-upload" accept=".docx">
+            </div>
+            <ul id="file-list"></ul>
+        </div>
+
+        <!-- Chat -->
+        <h2 class="section-header">DocBot Chat</h2>
+        <div id="chat-history">
+            <div class="msg-wrapper bot-msg-wrapper">
+                <div class="msg bot-msg">Hello! I am DocBot. Upload or select a document above, and tell me what you'd
+                    like to change!</div>
+            </div>
+        </div>
+        <div id="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Select a file to start editing..." disabled>
+            <button id="send-btn" disabled>Send</button>
+        </div>
+    </div>
+
+    <div id="main">
+        <div id="preview-header">
+            <h2 id="preview-title">Live Preview: <span id="current-file-name">No file selected</span></h2>
+            <div id="preview-actions">
+                <button id="download-btn" onclick="downloadSelected()" style="display:none; margin-right:8px;">⬇
+                    Download</button>
+                <button onclick="refreshPreview()">🔄 Refresh</button>
+            </div>
+        </div>
+        <div id="preview-content">
+            <div class="empty-state">
+                <span>📄</span>
+                Select a document from the sidebar to view its contents interactively.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = "http://localhost:8080";
+        let sessionId = "ui-" + Math.random().toString(36).substr(2, 9);
+        let selectedFile = null;
+
+        // Dom Elements
+        const chatHistory = document.getElementById("chat-history");
+        const chatInput = document.getElementById("chat-input");
+        const sendBtn = document.getElementById("send-btn");
+        const fileUpload = document.getElementById("file-upload");
+        const fileList = document.getElementById("file-list");
+        const currentFileName = document.getElementById("current-file-name");
+        const previewContent = document.getElementById("preview-content");
+        const downloadBtn = document.getElementById("download-btn");
+
+        // --- Fetch & Render Documents List ---
+        async function fetchDocuments() {
+            try {
+                const res = await fetch(`${API_BASE}/documents`);
+                const docs = await res.json();
+                fileList.innerHTML = "";
+
+                if (docs.length === 0) {
+                    fileList.innerHTML = '<li style="color:#aaa; cursor:default; hover:none;">No documents found</li>';
+                }
+
+                docs.forEach(doc => {
+                    const li = document.createElement("li");
+                    li.textContent = doc.filename;
+                    if (selectedFile === doc.filename) li.classList.add("selected");
+                    li.onclick = () => selectFile(doc.filename);
+                    fileList.appendChild(li);
+                });
+            } catch (e) {
+                console.error("Error fetching docs", e);
+            }
+        }
+
+        // --- Select File & Load Preview ---
+        function selectFile(filename) {
+            selectedFile = filename;
+            fetchDocuments(); // Re-render to show selected
+            currentFileName.textContent = filename;
+
+            chatInput.disabled = false;
+            sendBtn.disabled = false;
+            downloadBtn.style.display = "inline-block";
+            chatInput.placeholder = `Type instructions to edit ${filename}...`;
+
+            refreshPreview();
+        }
+
+        // --- Upload Document ---
+        fileUpload.addEventListener("change", async (e) => {
+            if (!e.target.files.length) return;
+            const file = e.target.files[0];
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const btnText = document.querySelector(".upload-btn");
+            const originalText = btnText.innerText;
+            btnText.innerText = "Uploading...";
+
+            try {
+                const res = await fetch(`${API_BASE}/documents/upload`, {
+                    method: "POST",
+                    body: formData
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    await fetchDocuments();
+                    selectFile(data.filename);
+                } else {
+                    alert("Upload failed: " + data.detail);
+                }
+            } catch (err) {
+                alert("Error: " + err.message);
+            }
+            btnText.innerText = originalText;
+            fileUpload.value = "";
+        });
+
+        // --- Load Live HTML Preview ---
+        async function refreshPreview() {
+            if (!selectedFile) return;
+
+            // Subtle loading state
+            previewContent.style.opacity = "0.5";
+
+            try {
+                const res = await fetch(`${API_BASE}/documents/${selectedFile}/preview`);
+                if (res.ok) {
+                    const html = await res.text();
+                    previewContent.innerHTML = html;
+                } else {
+                    previewContent.innerHTML = `<div class="empty-state" style="color:red;">Failed to load document preview.<br><small>${res.statusText}</small></div>`;
+                }
+            } catch (e) {
+                console.error("Preview error", e);
+            }
+            previewContent.style.opacity = "1";
+        }
+
+        // --- Download ---
+        function downloadSelected() {
+            if (selectedFile) {
+                window.location.href = `${API_BASE}/documents/${selectedFile}/download`;
+            }
+        }
+
+        // --- Chat Logic ---
+        function getTimeString() {
+            const now = new Date();
+            return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function createMsgElement(htmlContent, isUser) {
+            const wrapper = document.createElement("div");
+            wrapper.className = `msg-wrapper ${isUser ? 'user-msg-wrapper' : 'bot-msg-wrapper'}`;
+
+            const msg = document.createElement("div");
+            msg.className = `msg ${isUser ? 'user-msg' : 'bot-msg'}`;
+            msg.innerHTML = htmlContent;
+
+            const time = document.createElement("div");
+            time.className = "msg-time";
+            time.innerText = getTimeString();
+
+            wrapper.appendChild(msg);
+            wrapper.appendChild(time);
+            chatHistory.appendChild(wrapper);
+
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            return wrapper;
+        }
+
+        function appendTypingIndicator() {
+            const wrapper = document.createElement("div");
+            wrapper.className = "msg-wrapper bot-msg-wrapper typing-container";
+            wrapper.innerHTML = `
+                <div class="msg bot-msg typing-indicator">
+                    <span></span><span></span><span></span>
+                </div>
+            `;
+            chatHistory.appendChild(wrapper);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            return wrapper;
+        }
+
+        async function sendMessage() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+
+            createMsgElement(text, true);
+            chatInput.value = "";
+            sendBtn.disabled = true;
+
+            const typingIndicator = appendTypingIndicator();
+
+            // Setup Rule 6 Context for Agent
+            const msgPayload = selectedFile
+                ? `[Working on file: ${selectedFile}]\n\n${text}`
+                : text;
+
+            try {
+                // Add a timeout to the fetch request
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout for AI
+
+                const res = await fetch(`${API_BASE}/chat`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        message: msgPayload,
+                        user_id: "local_ui_user",
+                        session_id: sessionId
+                    }),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+                typingIndicator.remove();
+
+                if (res.ok) {
+                    const data = await res.json();
+
+                    let responseText = data.response || "No response generated.";
+
+                    // Simple Markdown to HTML link parsing (basic)
+                    let formatted = responseText
+                        .replace(/\n\n/g, '<br><br>')
+                        .replace(/\n/g, '<br>')
+                        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                        .replace(/\*(.*?)\*/g, '<i>$1</i>')
+                        .replace(/`(.*?)`/g, '<code style="background:#eee;padding:2px 4px;border-radius:4px;">$1</code>');
+
+                    createMsgElement(formatted, false);
+
+                    // Re-fetch files in case a new one was created or deleted
+                    fetchDocuments();
+
+                    // Live refresh the preview of the currently selected file!
+                    if (selectedFile) setTimeout(refreshPreview, 600);
+
+                } else {
+                    let errObj;
+                    try {
+                        errObj = await res.json();
+                    } catch (e) {
+                        errObj = { detail: res.statusText };
+                    }
+                    createMsgElement(`<div style="color:#ff4d4f; font-weight:600;">⚠️ Server Error: ${errObj.detail || res.statusText}</div>`, false);
+                }
+            } catch (err) {
+                if (document.body.contains(typingIndicator)) typingIndicator.remove();
+                const errorMsg = err.name === 'AbortError' ? 'Request timed out (AI took too long)' : err.message;
+                createMsgElement(`<div style="color:#ff4d4f; font-weight:600;">🚫 Connection Error: ${errorMsg}</div>`, false);
+                console.error("Chat Error:", err);
+            } finally {
+                sendBtn.disabled = false;
+                chatInput.focus();
+            }
+        }
+
+        sendBtn.addEventListener("click", sendMessage);
+        chatInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Initialize Call
+        fetchDocuments();
+    </script>
+</body>
+
+</html>

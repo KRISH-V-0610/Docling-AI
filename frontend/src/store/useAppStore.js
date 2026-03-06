@@ -9,6 +9,8 @@ const useAppStore = create((set) => ({
     // Processing State
     currentStep: 1, // 1: Upload, 2: Analyze, 3: Configure, 4: Process
     setStep: (step) => set({ currentStep: step }),
+    isProcessing: false,
+    setIsProcessing: (status) => set({ isProcessing: status }),
 
     // Form Config State
     targetStyle: 'IEEE',

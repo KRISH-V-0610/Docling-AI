@@ -17,10 +17,12 @@ import {
 import { cn } from './Button';
 import useAuthStore from '../store/useAuthStore';
 import useProjectStore from '../store/useProjectStore';
+import useAppStore from '../store/useAppStore';
 
 export function Sidebar({ isOpen, toggleSidebar }) {
     const { isAuthenticated, user, logout } = useAuthStore();
     const { projects, fetchAllProjects } = useProjectStore();
+    const { isProcessing } = useAppStore();
 
     React.useEffect(() => {
         if (isAuthenticated) {
@@ -72,7 +74,8 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                                     "flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-3 text-sm font-medium transition-all group overflow-hidden whitespace-nowrap",
                                     isActive
                                         ? "bg-white/20 text-white font-bold"
-                                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                                        : "text-white/70 hover:bg-white/10 hover:text-white",
+                                    isProcessing && "pointer-events-none opacity-50 grayscale"
                                 )}
                                 title={!isOpen ? item.name : undefined}
                             >
@@ -96,7 +99,8 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                             to="/profile"
                             className={({ isActive }) => cn(
                                 "flex-1 flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-3 text-sm font-medium transition-all group overflow-hidden whitespace-nowrap",
-                                isActive ? "bg-white/20 text-white font-bold" : "text-white/70 hover:bg-white/10 hover:text-white"
+                                isActive ? "bg-white/20 text-white font-bold" : "text-white/70 hover:bg-white/10 hover:text-white",
+                                isProcessing && "pointer-events-none opacity-50 grayscale"
                             )}
                             title={!isOpen ? "Profile" : undefined}
                         >
@@ -112,7 +116,11 @@ export function Sidebar({ isOpen, toggleSidebar }) {
 
                         {isOpen && <button
                             onClick={logout}
-                            className="flex items-center justify-center p-2.5 rounded-[var(--radius-md)] text-white/70 hover:bg-red-500/20 hover:text-red-300 transition-colors shrink-0"
+                            disabled={isProcessing}
+                            className={cn(
+                                "flex items-center justify-center p-2.5 rounded-[var(--radius-md)] text-white/70 hover:bg-red-500/20 hover:text-red-300 transition-colors shrink-0",
+                                isProcessing && "opacity-50 cursor-not-allowed pointer-events-none grayscale"
+                            )}
                             title="Log Out"
                         >
                             <LogOut className="w-5 h-5 shrink-0" />

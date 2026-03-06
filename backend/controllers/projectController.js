@@ -179,6 +179,85 @@ export const updateProjectFileContent = async (req, res) => {
     }
 };
 
+import HTMLtoDOCX from 'html-to-docx';
+
+// @desc    Convert HTML to DOCX and send as download
+// @route   POST /api/projects/:id/files/:fileId/download-docx
+// @access  Private
+export const downloadDocx = async (req, res) => {
+    try {
+        const { html, filename } = req.body;
+        if (!html) return res.status(400).json({ error: 'No HTML content provided for conversion' });
+
+        const fullHtml = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    body { font-family: 'Calibri', 'Segoe UI', sans-serif; font-size: 11pt; line-height: 1.6; color: #222; }
+                    h1 { font-size: 20pt; margin-top: 12pt; }
+                    h2 { font-size: 16pt; margin-top: 10pt; }
+                    h3 { font-size: 13pt; margin-top: 8pt; }
+                    code { font-family: 'Consolas', 'Courier New', monospace; background: #f4f4f4; padding: 2px 4px; border-radius: 3px; font-size: 10pt; }
+                    pre { background: #f4f4f4; padding: 12px; border-radius: 4px; overflow-x: auto; }
+                    pre code { background: none; padding: 0; }
+                    table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
+                    td, th { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+                    th { background: #f0f0f0; font-weight: bold; }
+                    blockquote { border-left: 3px solid #ccc; margin-left: 0; padding-left: 12px; color: #555; }
+                    img { max-width: 100%; }
+                    ul, ol { padding-left: 24pt; }
+                </style>
+            </head>
+            <body>${html}</body>
+            </html>
+        `;
+
+        const docxBuffer = await HTMLtoDOCX(fullHtml, null, {
+            table: { row: { cantSplit: true } },
+            footer: false,
+            pageNumber: false,
+        });
+
+        const outputFilename = filename || 'document.docx';
+
+        res.set({
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Content-Disposition': `attachment; filename="${outputFilename}"`,
+        });
+
+        res.send(Buffer.from(docxBuffer));
+
+    } catch (error) {
+        console.error('Error generating DOCX:', error);
+        res.status(500).json({ error: 'Failed to generate DOCX document' });
+    }
+};
+
+// @desc    Update a file's validation report
+// @route   PUT /api/projects/:id/files/:fileId/report
+// @access  Private
+export const updateValidationReport = async (req, res) => {
+    try {
+        const { report } = req.body;
+        const project = await Project.findOne({ _id: req.params.id, user: req.user._id });
+
+        if (!project) return res.status(404).json({ error: 'Project not found' });
+
+        const file = project.files.id(req.params.fileId);
+        if (!file) return res.status(404).json({ error: 'File not found in project' });
+
+        file.validationReport = Array.isArray(report) ? report : [];
+        await project.save();
+
+        res.json({ message: 'Validation report updated', validationReport: file.validationReport });
+    } catch (error) {
+        console.error('Error updating validation report:', error);
+        res.status(500).json({ error: 'Failed to update validation report' });
+    }
+};
+
 // @desc    Rename a project
 // @route   PUT /api/projects/:id
 // @access  Private

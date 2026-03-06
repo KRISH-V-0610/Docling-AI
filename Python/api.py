@@ -135,7 +135,16 @@ async def reconstruct_stream_endpoint(
         spell = SpellChecker()
         words = re.findall(r'\b[a-zA-Z]+\b', text)
         misspelled = list({word for word in spell.unknown(words) if len(word) > 2})
-        yield f"data: {{ \"log\": \"Found {len(misspelled)} spelling errors.\", \"errors\": {json.dumps(misspelled)} }}\n\n"
+        
+        # Get actual corrections from pyspellchecker
+        corrections = {}
+        for word in misspelled:
+            correction = spell.correction(word)
+            # Only include if it's a real improvement (different word, case-insensitively)
+            if correction and correction.lower() != word.lower():
+                corrections[word] = correction
+        
+        yield f"data: {{ \"log\": \"Found {len(misspelled)} spelling errors with {len(corrections)} auto-fixable.\", \"errors\": {json.dumps(misspelled)}, \"corrections\": {json.dumps(corrections)} }}\n\n"
         
         yield f"data: {{ \"log\": \"Bifurcating text into conceptual chunks...\" }}\n\n"
         chunks = chunk_text(text, max_words=800)
@@ -223,6 +232,7 @@ async def reconstruct_stream_endpoint(
             "markdown": merged_markdown,
             "latex": merged_latex,
             "errors": misspelled,
+            "corrections": corrections,
             "raw_chunks": chunks 
         }
         yield f"data: {json.dumps(final_payload)}\n\n"

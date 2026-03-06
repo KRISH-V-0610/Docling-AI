@@ -3,19 +3,21 @@ import { NavLink } from 'react-router-dom';
 import { Search, LayoutDashboard, Component, Link as LinkIcon, Bell, Settings } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from './Button';
+import useAppStore from '../store/useAppStore';
 
 export function Navbar() {
+    const { isProcessing } = useAppStore();
     return (
         <header className="flex h-20 w-full shrink-0 items-center px-6 lg:px-10 justify-between">
             {/* Left Nav Links */}
             <nav className="flex items-center gap-8">
-                <NavLink to="/" className={({ isActive }) => cn("flex items-center gap-2 font-semibold text-base border-b-2 py-2", isActive ? "text-[var(--color-text-main)] border-[var(--color-primary-500)]" : "text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-main)]")}>
+                <NavLink to="/" className={({ isActive }) => cn("flex items-center gap-2 font-semibold text-base border-b-2 py-2", isActive ? "text-[var(--color-text-main)] border-[var(--color-primary-500)]" : "text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-main)]", isProcessing && "opacity-50 pointer-events-none")}>
                     <LayoutDashboard className="w-5 h-5" /> Dashboard
                 </NavLink>
-                <NavLink to="/upload" className={({ isActive }) => cn("flex items-center gap-2 font-semibold text-base border-b-2 py-2", isActive ? "text-[var(--color-text-main)] border-[var(--color-primary-500)]" : "text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-main)]")}>
+                <NavLink to="/upload" className={({ isActive }) => cn("flex items-center gap-2 font-semibold text-base border-b-2 py-2", isActive ? "text-[var(--color-text-main)] border-[var(--color-primary-500)]" : "text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-main)]", isProcessing && "opacity-50 pointer-events-none")}>
                     <Component className="w-5 h-5" /> Workflows
                 </NavLink>
-                <button className="flex items-center gap-2 font-semibold text-base text-[var(--color-text-muted)] border-b-2 border-transparent hover:text-[var(--color-text-main)] py-2">
+                <button className={cn("flex items-center gap-2 font-semibold text-base text-[var(--color-text-muted)] border-b-2 border-transparent hover:text-[var(--color-text-main)] py-2", isProcessing && "opacity-50 pointer-events-none cursor-not-allowed")}>
                     <LinkIcon className="w-5 h-5" /> Integrations
                 </button>
             </nav>

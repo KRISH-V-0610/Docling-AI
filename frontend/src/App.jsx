@@ -13,6 +13,8 @@ import { Landing } from './pages/Landing';
 import { History } from './pages/History';
 import { ProjectWorkspace } from './pages/ProjectWorkspace';
 import { Process } from './pages/Process';
+import { ValidationArea } from './pages/ValidationArea';
+import { ValidationReport } from './components/ValidationReport';
 import useAuthStore from './store/useAuthStore';
 
 function PlaceholderPage({ title }) {
@@ -89,12 +91,13 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AuthenticatedLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/reports" element={<PlaceholderPage title="Validation Report" />} />
+            <Route path="/reports" element={<ValidationReport />} />
             <Route path="/settings" element={<PlaceholderPage title="Settings" />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/history" element={<History />} />
             <Route path="/project/:id" element={<ProjectWorkspace />} />
             <Route path="/process" element={<Process />} />
+            <Route path="/validation/:projectId/:originalId/:reconstructedId" element={<ValidationArea />} />
           </Route>
         </Route>
 
