@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Play, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Button } from '../components/Button';
 import { Card, CardContent } from '../components/Card';
 import { Progress } from '../components/Progress';
 import { StepProgress } from '../components/StepProgress';
 import useAppStore from '../store/useAppStore';
 
 const steps = ["Upload", "Analyze", "Configure", "Process"];
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/projects';
 
 export function Process() {
     const navigate = useNavigate();
@@ -22,11 +22,14 @@ export function Process() {
         customRules,
         llmEngine,
         setConvertedContent,
-        setLatexContent
+        setLatexContent,
+        reconstructProjectId,
+        reconstructSourceFileName,
     } = useAppStore();
 
     const [processingProgress, setProcessingProgress] = useState(0);
     const [isProcessingDone, setIsProcessingDone] = useState(false);
+    const [statusMessage, setStatusMessage] = useState('Uploading result...');
 
     useEffect(() => {
         setStep(4);
@@ -36,8 +39,7 @@ export function Process() {
 
         const startProcessing = async () => {
             if (!uploadedFile) {
-                const now = new Date();
-                addProcessLog({ time: now.toLocaleTimeString(), message: "Error: No file uploaded." });
+                addProcessLog({ time: new Date().toLocaleTimeString(), message: 'Error: No file uploaded.' });
                 setIsProcessingDone(true);
                 return;
             }
@@ -57,59 +59,93 @@ export function Process() {
                 if (!response.body) throw Error('ReadableStream not supported');
 
                 const reader = response.body.getReader();
-                const decoder = new TextDecoder("utf-8");
+                const decoder = new TextDecoder('utf-8');
 
                 let done = false;
-                let buffer = "";
+                let buffer = '';
                 let logCount = 0;
 
                 while (!done) {
                     const { value, done: readerDone } = await reader.read();
                     done = readerDone;
 
-                    if (value) {
-                        buffer += decoder.decode(value, { stream: true });
-                    }
+                    if (value) buffer += decoder.decode(value, { stream: true });
 
-                    const chunks = buffer.split("\n\n");
+                    const chunks = buffer.split('\n\n');
                     buffer = chunks.pop();
 
                     for (const chunk of chunks) {
-                        if (chunk.trim() === "") continue;
+                        if (!chunk.trim()) continue;
+                        if (!chunk.startsWith('data: ')) continue;
 
-                        if (chunk.startsWith("data: ")) {
-                            try {
-                                const jsonStr = chunk.substring(6);
-                                const payload = JSON.parse(jsonStr);
+                        try {
+                            const payload = JSON.parse(chunk.substring(6));
 
-                                if (payload.log && isMounted) {
-                                    const now = new Date();
-                                    addProcessLog({ time: now.toLocaleTimeString(), message: payload.log });
-                                    logCount++;
-                                    // Estimate progress, cap at 95% until final
-                                    setProcessingProgress(Math.min(95, logCount * 5));
-                                }
+                            if (payload.log && isMounted) {
+                                addProcessLog({ time: new Date().toLocaleTimeString(), message: payload.log });
+                                logCount++;
+                                setProcessingProgress(Math.min(90, logCount * 5));
+                            }
 
-                                if (payload.is_final && isMounted) {
-                                    setConvertedContent(payload.markdown);
-                                    setLatexContent(payload.latex);
+                            if (payload.error && isMounted) throw new Error(payload.error);
+
+                            if (payload.is_final && isMounted) {
+                                setConvertedContent(payload.markdown);
+                                setLatexContent(payload.latex);
+
+                                // ── Upload reconstructed MD back to the project ──
+                                if (reconstructProjectId) {
+                                    setStatusMessage('Saving reconstructed file to project...');
+                                    setProcessingProgress(95);
+
+                                    const baseName = reconstructSourceFileName || 'document';
+                                    const mdFileName = `${baseName}_reconstructed.md`;
+                                    const mdBlob = new Blob([payload.markdown], { type: 'text/markdown' });
+                                    const mdFile = new File([mdBlob], mdFileName, { type: 'text/markdown' });
+
+                                    const uploadForm = new FormData();
+                                    uploadForm.append('file', mdFile);
+
+                                    const token = localStorage.getItem('token');
+                                    const uploadRes = await fetch(`${API_URL}/${reconstructProjectId}/files`, {
+                                        method: 'POST',
+                                        headers: { Authorization: `Bearer ${token}` },
+                                        body: uploadForm,
+                                    });
+
+                                    if (uploadRes.ok) {
+                                        const newFileData = await uploadRes.json();
+                                        setProcessingProgress(100);
+                                        setIsProcessingDone(true);
+                                        addProcessLog({ time: new Date().toLocaleTimeString(), message: `✓ Saved as "${mdFileName}". Redirecting...` });
+
+                                        // Short delay so the user sees the log
+                                        setTimeout(() => {
+                                            if (isMounted) {
+                                                navigate(`/project/${reconstructProjectId}`, {
+                                                    state: { activeFileId: newFileData._id }
+                                                });
+                                            }
+                                        }, 1800);
+                                    } else {
+                                        throw new Error('Failed to upload reconstructed file to project.');
+                                    }
+                                } else {
                                     setProcessingProgress(100);
                                     setIsProcessingDone(true);
                                 }
-
-                                if (payload.error && isMounted) {
-                                    throw new Error(payload.error);
-                                }
-                            } catch (err) {
-                                console.warn("Failed to parse SSE payload block", err);
+                            }
+                        } catch (err) {
+                            if (isMounted) {
+                                addProcessLog({ time: new Date().toLocaleTimeString(), message: `Error: ${err.message}` });
+                                setIsProcessingDone(true);
                             }
                         }
                     }
                 }
             } catch (error) {
                 if (isMounted) {
-                    const now = new Date();
-                    addProcessLog({ time: now.toLocaleTimeString(), message: `Error: ${error.message}` });
+                    addProcessLog({ time: new Date().toLocaleTimeString(), message: `Error: ${error.message}` });
                     setIsProcessingDone(true);
                 }
             }
@@ -117,14 +153,9 @@ export function Process() {
 
         startProcessing();
 
-        return () => {
-            isMounted = false;
-        };
-    }, [setStep, addProcessLog, clearProcessLogs, uploadedFile, targetStyle, customRules, llmEngine, setConvertedContent, setLatexContent]);
-
-    const handleOpenEditor = () => {
-        navigate('/editor');
-    };
+        return () => { isMounted = false; };
+    }, [setStep, addProcessLog, clearProcessLogs, uploadedFile, targetStyle, customRules, llmEngine,
+        setConvertedContent, setLatexContent, reconstructProjectId, reconstructSourceFileName, navigate]);
 
     return (
         <motion.div
@@ -145,8 +176,10 @@ export function Process() {
 
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-semibold text-[var(--color-text-main)] flex items-center gap-2">
-                            {isProcessingDone ? <CheckCircle2 className="h-5 w-5 text-[var(--color-primary-600)]" /> : <Play className="h-5 w-5 text-[var(--color-primary-500)] animate-pulse" />}
-                            {isProcessingDone ? "Processing Complete" : "Processing..."}
+                            {isProcessingDone
+                                ? <CheckCircle2 className="h-5 w-5 text-[var(--color-primary-600)]" />
+                                : <Play className="h-5 w-5 text-[var(--color-primary-500)] animate-pulse" />}
+                            {isProcessingDone ? 'Processing Complete' : 'Processing...'}
                         </span>
                         <span className="text-sm font-medium text-[var(--color-text-muted)]">{processingProgress}%</span>
                     </div>
@@ -178,21 +211,18 @@ export function Process() {
                         )}
                     </div>
 
+                    {isProcessingDone && reconstructProjectId && (
+                        <motion.p
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="text-center text-sm text-[var(--color-primary-600)] font-semibold mt-6 flex items-center justify-center gap-2"
+                        >
+                            <CheckCircle2 className="h-4 w-4" /> {statusMessage}
+                        </motion.p>
+                    )}
+
                 </CardContent>
             </Card>
-
-            {isProcessingDone && (
-                <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex justify-end mt-6"
-                >
-                    <Button onClick={handleOpenEditor} size="lg" variant="primary">
-                        Open Editor <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                </motion.div>
-            )}
-
         </motion.div>
     );
 }

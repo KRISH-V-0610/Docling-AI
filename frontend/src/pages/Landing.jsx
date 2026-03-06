@@ -18,7 +18,7 @@ export function Landing() {
                         alt="Docling"
                         className="w-10 h-10 rounded-[var(--radius-md)] object-cover shadow-sm bg-[#fdfceb]"
                     />
-                    <span className="text-[var(--color-primary-600)] font-extrabold text-3xl tracking-tighter font-karla">
+                    <span className="text-[var(--color-primary-600)] font-extrabold text-3xl tracking-tighter font-karla ">
                         Docling
                     </span>
                 </div>

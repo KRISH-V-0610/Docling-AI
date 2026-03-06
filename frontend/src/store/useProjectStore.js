@@ -62,6 +62,50 @@ const useProjectStore = create((set, get) => ({
             set({ status: 'error', errorMessage: error.response?.data?.error || 'Failed to create project' });
             return null;
         }
+    },
+
+    renameProject: async (id, newTitle) => {
+        const token = localStorage.getItem('token');
+        if (!token) return false;
+
+        try {
+            await axios.put(`${API_URL}/${id}`, { title: newTitle }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            // Optimistically update lists
+            set((state) => ({
+                projects: state.projects.map(p => p._id === id ? { ...p, title: newTitle } : p),
+                recentProjects: state.recentProjects.map(p => p._id === id ? { ...p, title: newTitle } : p),
+            }));
+
+            return true;
+        } catch (error) {
+            set({ status: 'error', errorMessage: error.response?.data?.error || 'Failed to rename project' });
+            return false;
+        }
+    },
+
+    deleteProject: async (id) => {
+        const token = localStorage.getItem('token');
+        if (!token) return false;
+
+        try {
+            await axios.delete(`${API_URL}/${id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            // Optimistically remove from lists
+            set((state) => ({
+                projects: state.projects.filter(p => p._id !== id),
+                recentProjects: state.recentProjects.filter(p => p._id !== id),
+            }));
+
+            return true;
+        } catch (error) {
+            set({ status: 'error', errorMessage: error.response?.data?.error || 'Failed to delete project' });
+            return false;
+        }
     }
 }));
 

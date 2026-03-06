@@ -6,7 +6,7 @@ export const ToastProvider = ({ children }) => {
         <>
             {children}
             <Toaster
-                position="top-right"
+                position="top-center"
                 toastOptions={{
                     duration: 3000,
                     style: {
@@ -47,6 +47,40 @@ export const useToast = () => {
             } else {
                 toast(message);
             }
+        },
+        confirm: ({ title, description, confirmText = 'Confirm', variant = 'destructive', onConfirm }) => {
+            toast((t) => (
+                <div className="flex flex-col gap-3 min-w-[280px]">
+                    <div>
+                        <h4 className="font-bold text-[var(--color-text-main)] text-sm">{title}</h4>
+                        {description && <p className="text-xs text-[var(--color-text-muted)] mt-1">{description}</p>}
+                    </div>
+                    <div className="flex justify-end gap-2 mt-2">
+                        <button
+                            onClick={() => toast.dismiss(t.id)}
+                            className="px-3 py-1.5 text-xs font-semibold text-[var(--color-text-muted)] hover:bg-[var(--color-surface-200)] rounded transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={() => {
+                                toast.dismiss(t.id);
+                                onConfirm();
+                            }}
+                            className={`px-3 py-1.5 text-xs font-bold text-white rounded shadow-sm transition-colors ${variant === 'destructive' ? 'bg-red-500 hover:bg-red-600' : 'bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)]'}`}
+                        >
+                            {confirmText}
+                        </button>
+                    </div>
+                </div>
+            ), {
+                duration: Infinity,
+                position: "top-center",
+                style: {
+                    border: variant === 'destructive' ? '1px solid #fca5a5' : '1px solid var(--color-primary-300)',
+                    padding: '16px'
+                }
+            });
         }
     };
 };

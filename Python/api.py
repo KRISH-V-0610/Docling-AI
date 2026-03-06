@@ -116,12 +116,13 @@ async def reconstruct_stream_endpoint(
     if not api_key:
         raise HTTPException(status_code=500, detail="GROQ_API_KEY not found in environment variables.")
 
+    filename = file.filename.lower()
+    file_bytes = await file.read()
+
     async def sse_generator():
         yield f"data: {{ \"log\": \"Starting file extraction...\" }}\n\n"
         await asyncio.sleep(0.1) # Small delay to flush to client
         
-        filename = file.filename.lower()
-        file_bytes = await file.read()
         if filename.endswith('.pdf'): text = extract_from_pdf(file_bytes)
         elif filename.endswith('.docx'): text = extract_from_docx(file_bytes)
         elif filename.endswith('.tex'): text = extract_from_tex(file_bytes)

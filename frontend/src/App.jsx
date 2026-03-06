@@ -7,18 +7,12 @@ import ChatBot from './components/ChatBot';
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
-import { Upload } from './pages/Upload';
-import { Analyze } from './pages/Analyze';
-import { Configure } from './pages/Configure';
-import { Process } from './pages/Process';
-import { Editor } from './pages/Editor';
-import { Latex } from './pages/Latex';
 import { Auth } from './pages/Auth';
 import { Profile } from './pages/Profile';
 import { Landing } from './pages/Landing';
 import { History } from './pages/History';
 import { ProjectWorkspace } from './pages/ProjectWorkspace';
-import Workshop from './pages/Workshop';
+import { Process } from './pages/Process';
 import useAuthStore from './store/useAuthStore';
 
 function PlaceholderPage({ title }) {
@@ -95,18 +89,12 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AuthenticatedLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/upload" element={<Upload />} />
-            <Route path="/analyze" element={<Analyze />} />
-            <Route path="/configure" element={<Configure />} />
-            <Route path="/process" element={<Process />} />
-            <Route path="/editor" element={<Editor />} />
-            <Route path="/latex" element={<Latex />} />
             <Route path="/reports" element={<PlaceholderPage title="Validation Report" />} />
             <Route path="/settings" element={<PlaceholderPage title="Settings" />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/history" element={<History />} />
             <Route path="/project/:id" element={<ProjectWorkspace />} />
-            <Route path="/workshop" element={<Workshop />} />
+            <Route path="/process" element={<Process />} />
           </Route>
         </Route>
 
