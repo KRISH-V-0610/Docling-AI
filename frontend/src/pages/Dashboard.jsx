@@ -30,7 +30,7 @@ export function Dashboard() {
         const newProject = await createProject(title);
         if (newProject) {
             toast({ title: 'Project Created', description: `Started working on ${title}`, variant: 'success' });
-            navigate('/upload');
+            navigate(`/project/${newProject._id}`);
         } else {
             toast({ title: 'Error', description: 'Failed to create project', variant: 'error' });
         }
@@ -72,7 +72,7 @@ export function Dashboard() {
                     {recentProjects.map((project) => (
                         <div
                             key={project._id}
-                            onClick={() => navigate('/upload')} // We will route to project details later
+                            onClick={() => navigate(`/project/${project._id}`)} // Route directly to project workspace
                             className="bg-white rounded-[var(--radius-xl)] p-6 shadow-[var(--shadow-card)] flex flex-col items-center justify-center text-center cursor-pointer hover:shadow-[var(--shadow-floating)] transition-all border border-[var(--color-surface-200)] group"
                         >
                             <div className="w-16 h-16 mb-4 rounded-2xl bg-[var(--color-primary-50)] flex items-center justify-center border-2 border-[var(--color-primary-100)] group-hover:scale-105 transition-transform shadow-inner">
@@ -123,17 +123,9 @@ export function Dashboard() {
                             variant="primary"
                             size="lg"
                             className="bg-[var(--color-primary-900)] hover:bg-[#a65d1d] text-white shadow-lg border-none font-bold text-base px-8 py-6 h-auto"
-                            onClick={() => navigate('/upload')}
+                            onClick={handleCreateProject}
                         >
                             <FileText className="w-5 h-5 mr-2" /> Upload Manuscript
-                        </Button>
-                        <Button
-                            variant="secondary"
-                            size="lg"
-                            className="bg-transparent border-2 border-[var(--color-surface-50)]/30 text-[var(--color-surface-50)] hover:bg-white/10 font-bold text-base px-8 py-6 h-auto"
-                            onClick={() => navigate('/latex')}
-                        >
-                            <Code2 className="w-5 h-5 mr-2" /> Open LaTeX Editor
                         </Button>
                     </div>
                 </div>

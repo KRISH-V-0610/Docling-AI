@@ -2,6 +2,7 @@ import Project from '../models/Project.js';
 import multer from 'multer';
 import mammoth from 'mammoth';
 import { createRequire } from 'module';
+import { cloudinary } from '../config/cloudinary.js';
 
 const require = createRequire(import.meta.url);
 const pdfParse = require('pdf-parse');
@@ -99,19 +100,45 @@ export const uploadProjectFile = async (req, res) => {
         } else if (mimetype === 'application/pdf') {
             const data = await pdfParse(buffer);
             extractedContent = data.text;
-        } else if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || originalname.endsWith('.docx')) {
+        } else if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || originalname.endsWith('.docx') || originalname.endsWith('.doc')) {
             const result = await mammoth.extractRawText({ buffer });
             extractedContent = result.value;
         } else {
-            return res.status(400).json({ error: 'Unsupported file type. Please upload .txt, .md, .pdf, or .docx' });
+            return res.status(400).json({ error: 'Unsupported file type. Please upload .txt, .md, .pdf, or .doc/.docx' });
+        }
+
+        // Upload to Cloudinary using upload_stream for raw file types
+        const uploadToCloudinary = (fileBuffer, fileName) => {
+            return new Promise((resolve, reject) => {
+                const stream = cloudinary.uploader.upload_stream(
+                    { folder: 'docling_documents', resource_type: 'raw', public_id: fileName },
+                    (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result);
+                    }
+                );
+                stream.end(fileBuffer);
+            });
+        };
+
+        let cloudUrl = '';
+        try {
+            const uploadResult = await uploadToCloudinary(buffer, originalname);
+            cloudUrl = uploadResult.secure_url;
+        } catch (uploadError) {
+            console.error('Cloudinary upload error:', uploadError);
+            return res.status(500).json({ error: 'Failed to offload document to Cloudinary.' });
         }
 
         const newFile = {
             originalName: originalname,
             mimeType: mimetype,
             size: size,
+            cloudUrl: cloudUrl,
             content: extractedContent
         };
+
+        console.log(`Document Uploaded! Extracted Content Length: ${extractedContent.length}`);
 
         project.files.push(newFile);
         await project.save();

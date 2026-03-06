@@ -30,8 +30,6 @@ export function Sidebar({ isOpen, toggleSidebar }) {
     const navItems = [
         { name: 'Dashboard', path: '/dashboard', icon: FileText },
         { name: 'Projects History', path: '/history', icon: Upload },
-        { name: 'Formatting Editor', path: '/editor', icon: PenTool },
-        { name: 'LaTeX Editor', path: '/latex', icon: Code2 },
         { name: 'Validation Report', path: '/reports', icon: CheckCircle },
         { name: 'Settings', path: '/settings', icon: Settings },
     ];

@@ -2,11 +2,11 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { FileText, File, UploadCloud, FileType2, Loader2, Save } from 'lucide-react';
+import { FileText, File, UploadCloud, FileType2, Loader2, Save, Plus } from 'lucide-react';
 import { Button, cn } from '../components/Button';
 import { useToast } from '../components/Toasts';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import MDEditor from '@uiw/react-md-editor';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/projects';
@@ -89,8 +89,8 @@ export function ProjectWorkspace() {
 
         // Strict mime type check
         const ext = file.name.split('.').pop().toLowerCase();
-        if (!['txt', 'md', 'doc', 'docx', 'pdf'].includes(ext)) {
-            toast({ title: 'Invalid format', description: 'Please upload only .txt, .md, .pdf, or Word docs', variant: 'error' });
+        if (!['txt', 'md', 'doc', 'docx'].includes(ext)) {
+            toast({ title: 'Invalid format', description: 'Please upload only .txt, .md, or Word docs', variant: 'error' });
             return;
         }
 
@@ -111,6 +111,7 @@ export function ProjectWorkspace() {
                 ...prev,
                 files: [...prev.files, res.data]
             }));
+            console.log("Server responded with new document:", res.data);
             setActiveFileId(res.data._id);
             toast({ title: 'File uploaded', description: 'Document parsed successfully', variant: 'success' });
 
@@ -170,7 +171,7 @@ export function ProjectWorkspace() {
                     >
                         {uploading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : <><Plus className="w-3 h-3 mr-1" /> Add File</>}
                     </Button>
-                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".txt,.md,.doc,.docx,.pdf" />
+                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".txt,.md,.doc,.docx" />
                 </div>
             </div>
 

@@ -5,6 +5,7 @@ const fileSchema = new mongoose.Schema({
     storedName: { type: String }, // Can be local path, S3, or Cloudinary depending on storage
     mimeType: { type: String, required: true },
     size: { type: Number },
+    cloudUrl: { type: String }, // Stores Cloudinary URL of the raw document file
     content: { type: String, default: '' }, // For parsed text/md to show in web editor
 }, { timestamps: true });
 
