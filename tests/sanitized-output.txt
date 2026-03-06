@@ -1,0 +1,315 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{trees, positioning}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta}
+
+
+\begin{document}
+
+\title{Synthetic data generation using GenAI to Boost AI model}
+
+\author{
+\IEEEauthorblockN{Diya Bavariya}
+\IEEEauthorblockA{
+\textit{Computer Science Department, Institute of Technology} \\
+\textit{Nirma University}\\
+Ahmedabad, India \\
+diyabavariya3@gmail.com
+}
+\and
+\IEEEauthorblockN{Tanvi Madani}
+\IEEEauthorblockA{
+\textit{Computer Science Department, Institute of Technology} \\
+\textit{Nirma University}\\
+Ahmedabad, India \\
+tanvimadani88888@gmail.com
+}
+}
+
+\maketitle
+
+\begin{abstract}
+
+\end{abstract}
+
+\begin{IEEEkeywords}
+\end{IEEEkeywords}
+
+\section{Background}
+
+Artificial Intelligence systems today depend heavily on large, high-quality datasets to achieve strong and reliable performance. However, collecting real-world data is often expensive, time-consuming, and restricted by privacy regulations. In domains such as healthcare, finance, and autonomous driving, data scarcity and ethical concerns make large-scale data acquisition particularly challenging. These limitations have encouraged researchers to explore alternative approaches for generating training data.
+
+Synthetic data generation involves creating artificial data that reflects the statistical properties of real datasets. Traditional methods such as simple data augmentation and simulation techniques have been used in the past, but they often fail to capture complex real-world patterns.
+
+Recent advances in generative modeling have significantly improved this process. Models such as the Generative Adversarial Network (GAN) and Variational Autoencoder (VAE), along with diffusion models and large language models, are capable of learning deep data distributions and generating realistic synthetic samples across image, text, and tabular domains. These techniques have been applied to improve model performance, address data imbalance, and reduce privacy risks.
+
+Despite their potential, several challenges remain, including training instability, bias amplification, difficulties in evaluating synthetic data quality, and ethical concerns. Moreover, there is a lack of a unified taxonomy that systematically organizes existing approaches across different data types and application areas.
+
+Therefore, this literature review aims to analyze current research in GenAI-based synthetic data generation, develop a structured taxonomy of methods, compare existing approaches, and highlight open challenges and future research directions.
+
+
+\section{Survey Methodology}
+
+\subsection{Research Objective}
+
+The objective of this survey is to systematically analyze research contributions related to synthetic data generation using Generative AI techniques and evaluate their effectiveness in improving AI model performance across different domains.
+
+This review focuses on:
+
+\begin{itemize}
+    \item Generative models used for synthetic data creation
+    \item Data modalities (image, text, tabular, multimodal)
+    \item Evaluation metrics
+    \item Application domains
+    \item Strengths and limitations
+\end{itemize}
+
+\subsection{Search Strategy}
+
+A systematic literature search was conducted using major academic databases including:
+
+\begin{itemize}
+    \item IEEE Xplore
+    \item ACM Digital Library
+    \item Springer Link
+    \item Elsevier ScienceDirect
+    \item Google Scholar
+\end{itemize}
+
+The following keywords were used:
+
+\begin{itemize}
+    \item ``Synthetic Data Generation''
+    \item ``Generative AI for Data Augmentation''
+    \item ``GAN-based Synthetic Data''
+    \item ``Diffusion Models for Data Generation''
+    \item ``LLM-based Synthetic Text Generation''
+    \item ``Privacy-preserving Synthetic Data''
+\end{itemize}
+
+The search was limited to papers published between 2015 and 2026, as generative AI techniques significantly evolved after the introduction of deep generative models.
+
+\subsection{Inclusion and Exclusion Criteria}
+
+\textbf{Inclusion Criteria:}
+
+\begin{itemize}
+    \item Peer-reviewed journal or conference papers
+    \item Papers proposing or evaluating GenAI-based synthetic data methods
+    \item Studies reporting experimental validation
+    \item Research focusing on AI model performance improvement
+\end{itemize}
+
+\textbf{Exclusion Criteria:}
+
+\begin{itemize}
+    \item Non-peer-reviewed articles or blog posts
+    \item Papers without experimental evaluation
+    \item Studies not directly related to synthetic data generation
+    \item Duplicate studies across databases
+\end{itemize}
+
+\subsection{Paper Selection Process}
+
+The paper selection followed a structured screening process:
+
+\begin{enumerate}
+    \item Initial keyword search across databases
+    \item Removal of duplicate records
+    \item Title and abstract screening
+    \item Full-text review for eligibility
+    \item Final inclusion for comparative analysis
+\end{enumerate}
+
+The selection procedure is summarized using the PRISMA framework.
+
+\subsection{Data Extraction and Analysis}
+
+For each selected paper, the following information was extracted:
+
+\begin{itemize}
+    \item Author(s) and year
+    \item Generative model used (GAN, VAE, Diffusion, LLM, etc.)
+    \item Data modality
+    \item Application domain
+    \item Dataset used
+    \item Evaluation metrics
+    \item Performance improvement reported
+    \item Limitations
+\end{itemize}
+
+The extracted data was organized into a comparative analysis table to identify trends, research gaps, and dominant methodologies.
+
+
+\begin{table*}[!t]
+\centering
+\caption{Comprehensive Comparative Analysis of Generative Models and Synthetic Data Studies}
+\scriptsize
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{c p{2.5cm} c p{2cm} p{3cm} p{3cm} p{3cm}}
+\toprule
+\textbf{No} & \textbf{Authors / Type} & \textbf{Year} & \textbf{Category} & \textbf{Core Idea / Focus} & \textbf{Key Contribution} & \textbf{Limitation} \\
+\midrule
+
+1 & Survey Study & 2024 & Taxonomy & GenAI-based synthetic data classification & Structured classification of synthetic data pipelines & Mostly NLP-oriented discussion \\
+
+2 & Applied Study & 2024 & Data Augmentation & Data scarcity in ML & Demonstrates performance improvement using GAN, VAE, Diffusion & Broad experimental scope \\
+
+3 & Review Study & 2025 & Comparative Models & Cross-domain generative comparison & Comparative framework across GAN variants, VAE, CTGAN & Limited theoretical grounding \\
+
+4 & Application Study & 2025 & Healthcare AI & Rare disease synthetic data generation & Privacy-aware clinical AI training using GAN, VAE, CTGAN & Domain-specific evaluation only \\
+
+5 & Policy Perspective & 2025 & Governance & Biomedical innovation regulation & Regulatory and risk-based evaluation framework & Limited technical implementation \\
+
+6 & Position Paper & 2026 & Theory & Generative data science foundations & Defines fidelity--utility--privacy trade-off & Minimal empirical validation \\
+
+7 & Theoretical Study & 2025 & Utility Theory & Formal performance bounds for synthetic data & Utility bounds for ML performance (GAN, VAE, Copula, CTGAN) & Complex mathematical framework \\
+
+8 & Privacy Framework & 2016 & Privacy Model & Differential privacy in deep learning & DP-SGD mechanism for strong privacy & Accuracy--privacy trade-off \\
+
+9 & Goodfellow et al. & 2014 & Foundational Model & Adversarial training & Generator--discriminator framework (GAN) & Training instability \\
+
+10 & Mirza \& Osindero & 2014 & Model Extension & Conditional GAN & Label-guided synthetic generation & Mode collapse risk \\
+
+11 & Arjovsky, Chintala \& Bottou & 2017 & Model Improvement & Wasserstein GAN & Stable convergence via Earth-Mover distance & Requires Lipschitz constraint \\
+
+12 & Kingma \& Welling & 2013 & Foundational Model & Variational Autoencoder & Probabilistic latent representation learning & Blurry outputs \\
+
+13 & Xu et al. & 2019 & Specialized Model & CTGAN & Mixed-type tabular synthetic generation & Hyperparameter sensitivity \\
+
+14 & Ho, Jain \& Abbeel & 2020 & Modern Model & Diffusion models & Iterative denoising probabilistic models & High computational cost \\
+
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\documentclass{article}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta}
+
+\begin{document}
+
+\begin{figure*}[ht]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    main/.style={
+        draw=cyan!60!black,
+        fill=cyan!30,
+        rounded corners,
+        minimum width=3.5cm,
+        minimum height=0.9cm,
+        align=center,
+        text=black,
+        font=\bfseries
+    },
+    category/.style={
+        draw=orange!80!black,
+        fill=orange!25,
+        rounded corners,
+        minimum width=3.8cm,
+        minimum height=0.8cm,
+        align=center,
+        font=\bfseries
+    },
+    leaf/.style={
+        draw=magenta!70!black,
+        fill=magenta!15,
+        rounded corners,
+        minimum width=4cm,
+        minimum height=0.75cm,
+        align=center
+    },
+    arrow/.style={-Latex, thick}
+]
+
+% Root
+\node[main] (root) at (0,0) {GenAI-Based\\Synthetic Data Generation};
+
+% Categories (perfect vertical alignment)
+\node[category] (arch) at (4,2.8) {Generative Architecture};
+\node[category] (mod)  at (4,0.9) {Data Modality};
+\node[category] (app)  at (4,-1.0) {Application Objective};
+\node[category] (eval) at (4,-2.9) {Evaluation Metrics};
+
+% Leaves aligned in columns
+% Architecture
+\node[leaf] (gan)  at (9,3.8) {GAN-Based};
+\node[leaf] (vae)  at (9,2.9) {VAE-Based};
+\node[leaf] (diff) at (9,2.0) {Diffusion-Based};
+\node[leaf] (llm)  at (9,1.1) {LLM-Based};
+
+% Modality
+\node[leaf] (img)   at (9,0.2) {Image};
+\node[leaf] (text)  at (9,-0.7) {Text};
+\node[leaf] (tab)   at (9,-1.6) {Tabular};
+\node[leaf] (multi) at (9,-2.5) {Multimodal};
+
+% Application
+\node[leaf] (aug)    at (14,0.2) {Data Augmentation};
+\node[leaf] (privacy)at (14,-0.7) {Privacy Preservation};
+\node[leaf] (imb)    at (14,-1.6) {Imbalance Handling};
+\node[leaf] (domain) at (14,-2.5) {Domain Adaptation};
+
+% Evaluation
+\node[leaf] (fid)  at (9,-3.8) {Fidelity Metrics};
+\node[leaf] (util) at (9,-4.7) {Utility Metrics};
+\node[leaf] (priv) at (9,-5.6) {Privacy Metrics};
+
+% Connections (clean orthogonal style)
+\draw[arrow] (root) -- (arch);
+\draw[arrow] (root) -- (mod);
+\draw[arrow] (root) -- (app);
+\draw[arrow] (root) -- (eval);
+
+\draw[arrow] (arch.east) -- (gan.west);
+\draw[arrow] (mod.east) -- (img.west);
+\draw[arrow] (app.east) -- (aug.west);
+\draw[arrow] (eval.east) -- (fid.west);
+
+\end{tikzpicture}
+\caption{Final Clean and Symmetric Taxonomy of GenAI-Based Synthetic Data Generation}
+\end{figure*}
+
+\end{document}
+
+
+\section{Related Work}
+
+\section{Methodology}
+
+\subsection{System Architecture}
+
+\section{Results and Discussion}
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=0.45\textwidth]{figure.png}}
+\caption{Example Figure}
+\label{fig}
+\end{figure}
+
+\section{Conclusion}
+
+\section*{Acknowledgment}
+
+\begin{thebibliography}{00}
+
+\bibitem{b1} Author, "Title of paper," Journal Name, Year.
+
+\bibitem{b2} Author, "Book Title," Publisher, Year.
+
+\end{thebibliography}
+
+\end{document}
