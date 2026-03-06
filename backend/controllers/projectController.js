@@ -2,7 +2,6 @@ import Project from '../models/Project.js';
 import multer from 'multer';
 import mammoth from 'mammoth';
 import { createRequire } from 'module';
-import { cloudinary } from '../config/cloudinary.js';
 
 const require = createRequire(import.meta.url);
 const pdfParse = require('pdf-parse');
@@ -18,9 +17,30 @@ export const createProject = async (req, res) => {
     try {
         const { title } = req.body;
 
+        let finalTitle = title;
+        if (!finalTitle || finalTitle.trim() === '') {
+            // Auto-naming logic: find existing 'Untitled' projects for this user
+            const untitledProjects = await Project.find({
+                user: req.user._id,
+                title: /^Untitled( \(\d+\))?$/
+            });
+
+            if (untitledProjects.length === 0) {
+                finalTitle = 'Untitled';
+            } else {
+                // Extract numbers from "Untitled (X)"
+                const numbers = untitledProjects.map(p => {
+                    const match = p.title.match(/^Untitled \((\d+)\)$/);
+                    return match ? parseInt(match[1], 10) : 0;
+                });
+                const maxNumber = Math.max(...numbers, 0);
+                finalTitle = `Untitled (${maxNumber + 1})`;
+            }
+        }
+
         const newProject = await Project.create({
             user: req.user._id,
-            title: title || `New Document ${new Date().toLocaleDateString()}`
+            title: finalTitle
         });
 
         res.status(201).json(newProject);
@@ -95,50 +115,35 @@ export const uploadProjectFile = async (req, res) => {
         let extractedContent = '';
 
         // Extract text based on mime type
-        if (mimetype === 'text/plain' || mimetype === 'text/markdown' || originalname.endsWith('.md')) {
+        const lowerName = originalname.toLowerCase();
+
+        if (mimetype.includes('text') || lowerName.endsWith('.md') || lowerName.endsWith('.txt')) {
             extractedContent = buffer.toString('utf-8');
-        } else if (mimetype === 'application/pdf') {
+        } else if (mimetype === 'application/pdf' || lowerName.endsWith('.pdf')) {
             const data = await pdfParse(buffer);
             extractedContent = data.text;
-        } else if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || originalname.endsWith('.docx') || originalname.endsWith('.doc')) {
-            const result = await mammoth.extractRawText({ buffer });
-            extractedContent = result.value;
+        } else if (mimetype.includes('wordprocessingml') || lowerName.endsWith('.docx') || lowerName.endsWith('.doc')) {
+            try {
+                // Mammoth is primarily for docx, but attempt extraction
+                const result = await mammoth.extractRawText({ buffer });
+                extractedContent = result.value;
+            } catch (err) {
+                console.warn('Mammoth extraction warning for doc/docx:', err.message);
+                // Last ditch raw ASCII extraction for legacy .doc buffers to avoid completely empty states
+                extractedContent = buffer.toString('utf-8').replace(/[^\x20-\x7E\n]/g, '');
+            }
         } else {
             return res.status(400).json({ error: 'Unsupported file type. Please upload .txt, .md, .pdf, or .doc/.docx' });
-        }
-
-        // Upload to Cloudinary using upload_stream for raw file types
-        const uploadToCloudinary = (fileBuffer, fileName) => {
-            return new Promise((resolve, reject) => {
-                const stream = cloudinary.uploader.upload_stream(
-                    { folder: 'docling_documents', resource_type: 'raw', public_id: fileName },
-                    (error, result) => {
-                        if (error) reject(error);
-                        else resolve(result);
-                    }
-                );
-                stream.end(fileBuffer);
-            });
-        };
-
-        let cloudUrl = '';
-        try {
-            const uploadResult = await uploadToCloudinary(buffer, originalname);
-            cloudUrl = uploadResult.secure_url;
-        } catch (uploadError) {
-            console.error('Cloudinary upload error:', uploadError);
-            return res.status(500).json({ error: 'Failed to offload document to Cloudinary.' });
         }
 
         const newFile = {
             originalName: originalname,
             mimeType: mimetype,
             size: size,
-            cloudUrl: cloudUrl,
-            content: extractedContent
+            content: extractedContent || ''
         };
 
-        console.log(`Document Uploaded! Extracted Content Length: ${extractedContent.length}`);
+        console.log(`Document Uploaded: ${originalname} | Content Length: ${(extractedContent || '').length}`);
 
         project.files.push(newFile);
         await project.save();
@@ -171,5 +176,91 @@ export const updateProjectFileContent = async (req, res) => {
     } catch (error) {
         console.error('Error updating file:', error);
         res.status(500).json({ error: 'Failed to update file content' });
+    }
+};
+
+// @desc    Rename a project
+// @route   PUT /api/projects/:id
+// @access  Private
+export const renameProject = async (req, res) => {
+    try {
+        const { title } = req.body;
+        if (!title || title.trim() === '') {
+            return res.status(400).json({ error: 'Title cannot be empty' });
+        }
+
+        const project = await Project.findOneAndUpdate(
+            { _id: req.params.id, user: req.user._id },
+            { title: title.trim() },
+            { new: true }
+        );
+
+        if (!project) return res.status(404).json({ error: 'Project not found' });
+        res.json(project);
+    } catch (error) {
+        console.error('Error renaming project:', error);
+        res.status(500).json({ error: 'Failed to rename project' });
+    }
+};
+
+// @desc    Delete a project
+// @route   DELETE /api/projects/:id
+// @access  Private
+export const deleteProject = async (req, res) => {
+    try {
+        const project = await Project.findOneAndDelete({ _id: req.params.id, user: req.user._id });
+        if (!project) return res.status(404).json({ error: 'Project not found' });
+        res.json({ message: 'Project deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting project:', error);
+        res.status(500).json({ error: 'Failed to delete project' });
+    }
+};
+
+// @desc    Rename a file in a project
+// @route   PUT /api/projects/:id/files/:fileId/rename
+// @access  Private
+export const renameProjectFile = async (req, res) => {
+    try {
+        const { originalName } = req.body;
+        if (!originalName || originalName.trim() === '') {
+            return res.status(400).json({ error: 'Filename cannot be empty' });
+        }
+
+        const project = await Project.findOne({ _id: req.params.id, user: req.user._id });
+        if (!project) return res.status(404).json({ error: 'Project not found' });
+
+        const file = project.files.id(req.params.fileId);
+        if (!file) return res.status(404).json({ error: 'File not found in project' });
+
+        file.originalName = originalName.trim();
+        await project.save();
+
+        res.json(file);
+    } catch (error) {
+        console.error('Error renaming file:', error);
+        res.status(500).json({ error: 'Failed to rename file' });
+    }
+};
+
+// @desc    Delete a file from a project
+// @route   DELETE /api/projects/:id/files/:fileId
+// @access  Private
+export const deleteProjectFile = async (req, res) => {
+    try {
+        const project = await Project.findOne({ _id: req.params.id, user: req.user._id });
+        if (!project) return res.status(404).json({ error: 'Project not found' });
+
+        const fileIndex = project.files.findIndex(f => f._id.toString() === req.params.fileId);
+        if (fileIndex === -1) return res.status(404).json({ error: 'File not found in project' });
+
+        // Remove file from array
+        project.files.splice(fileIndex, 1);
+        await project.save();
+
+        res.json({ message: 'File deleted successfully', fileId: req.params.fileId });
+    } catch (error) {
+        console.error('Error deleting file:', error);
+        res.status(500).json({ error: 'Failed to delete file' });
     }
 };

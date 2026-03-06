@@ -2,9 +2,11 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { FileText, File, UploadCloud, FileType2, Loader2, Save, Plus } from 'lucide-react';
+import { FileText, File, UploadCloud, FileType2, Loader2, Save, Plus, ChevronLeft, Trash2, Edit2, Check, X } from 'lucide-react';
 import { Button, cn } from '../components/Button';
 import { useToast } from '../components/Toasts';
+import { Link, useNavigate } from 'react-router-dom';
+import useProjectStore from '../store/useProjectStore';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import MDEditor from '@uiw/react-md-editor';
@@ -13,13 +15,22 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/proje
 
 export function ProjectWorkspace() {
     const { id } = useParams();
+    const navigate = useNavigate();
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [activeFileId, setActiveFileId] = useState(null);
     const [localContent, setLocalContent] = useState('');
-    const { toast } = useToast();
+
+    // UI states for renaming
+    const [isEditingProject, setIsEditingProject] = useState(false);
+    const [editingProjectTitle, setEditingProjectTitle] = useState('');
+    const [editingFileId, setEditingFileId] = useState(null);
+    const [editingFileName, setEditingFileName] = useState('');
+
+    const { renameProject, deleteProject } = useProjectStore();
+    const { toast, confirm } = useToast();
     const fileInputRef = useRef(null);
     const saveTimeoutRef = useRef(null);
 
@@ -45,13 +56,33 @@ export function ProjectWorkspace() {
         return () => clearTimeout(saveTimeoutRef.current);
     }, [id]);
 
+    // Ref to track which file ID is currently loaded in the editor to prevent active-typing loops
+    const [loadedFileId, setLoadedFileId] = useState(null);
+
     // When active file changes, load its content into the editor state
     useEffect(() => {
         if (project && activeFileId) {
-            const file = project.files?.find(f => f._id === activeFileId);
-            if (file) setLocalContent(file.content || '');
+            if (activeFileId !== loadedFileId) {
+                const file = project.files?.find(f => f._id === activeFileId);
+                if (file) {
+                    let text = file.content || '';
+
+                    // If it's not Markdown and doesn't explicitly look like HTML, normalize to HTML paragraphs for Quill
+                    const isMarkdown = file.originalName.toLowerCase().endsWith('.md');
+                    if (!isMarkdown && text && !text.includes('<p>') && !text.includes('<h')) {
+                        text = text.split('\n')
+                            .map(line => line.trim())
+                            .filter(line => line.length > 0)
+                            .map(line => `<p>${line}</p>`)
+                            .join('');
+                    }
+
+                    setLocalContent(text);
+                    setLoadedFileId(activeFileId);
+                }
+            }
         }
-    }, [activeFileId, project]);
+    }, [activeFileId, project, loadedFileId]);
 
     const handleSaveContent = async (contentToSave) => {
         if (!activeFileId) return;
@@ -123,6 +154,98 @@ export function ProjectWorkspace() {
         }
     };
 
+    // --- New CRUD Handlers ---
+
+    const handleProjectRenameSubmit = async () => {
+        if (!editingProjectTitle.trim() || editingProjectTitle === project.title) {
+            setIsEditingProject(false);
+            return;
+        }
+        const success = await renameProject(id, editingProjectTitle);
+        if (success) {
+            setProject(prev => ({ ...prev, title: editingProjectTitle }));
+            toast({ title: 'Project Renamed', variant: 'success' });
+        } else {
+            toast({ title: 'Rename failed', variant: 'error' });
+        }
+        setIsEditingProject(false);
+    };
+
+    const handleProjectDelete = () => {
+        confirm({
+            title: "Delete Workspace",
+            description: "Are you sure you want to permanently delete this entire project? This action cannot be undone.",
+            confirmText: "Delete Project",
+            onConfirm: async () => {
+                const success = await deleteProject(id);
+                if (success) {
+                    toast({ title: 'Project Deleted', variant: 'success' });
+                    navigate('/dashboard');
+                } else {
+                    toast({ title: 'Deletion failed', variant: 'error' });
+                }
+            }
+        });
+    };
+
+    const handleFileRenameSubmit = async (fileId) => {
+        if (!editingFileName.trim()) {
+            setEditingFileId(null);
+            return;
+        }
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.put(`${API_URL}/${id}/files/${fileId}/rename`, { originalName: editingFileName }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setProject(prev => {
+                const updatedFiles = prev.files.map(f => f._id === fileId ? { ...f, originalName: res.data.originalName } : f);
+                return { ...prev, files: updatedFiles };
+            });
+            toast({ title: 'File Renamed', variant: 'success' });
+        } catch (error) {
+            toast({ title: 'Rename failed', variant: 'error' });
+        } finally {
+            setEditingFileId(null);
+        }
+    };
+
+    const handleFileDelete = (fileId, e) => {
+        e.stopPropagation();
+
+        confirm({
+            title: "Delete File",
+            description: "Are you sure you want to delete this file?",
+            confirmText: "Delete",
+            onConfirm: async () => {
+                try {
+                    const token = localStorage.getItem('token');
+                    await axios.delete(`${API_URL}/${id}/files/${fileId}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+
+                    setProject(prev => {
+                        const updatedFiles = prev.files.filter(f => f._id !== fileId);
+                        return { ...prev, files: updatedFiles };
+                    });
+
+                    if (activeFileId === fileId) {
+                        const remainingFiles = project.files.filter(f => f._id !== fileId);
+                        if (remainingFiles.length > 0) {
+                            setActiveFileId(remainingFiles[0]._id);
+                        } else {
+                            setActiveFileId(null);
+                            setLocalContent('');
+                        }
+                    }
+                    toast({ title: 'File Deleted', variant: 'success' });
+                } catch (error) {
+                    toast({ title: 'Deletion failed', variant: 'error' });
+                }
+            }
+        });
+    };
+
     if (loading) {
         return <div className="flex h-full items-center justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary-500)]" /></div>;
     }
@@ -136,30 +259,101 @@ export function ProjectWorkspace() {
 
             {/* Left Sidebar: File Tree */}
             <div className="w-64 border-r border-[var(--color-surface-200)] bg-[var(--color-surface-50)] flex flex-col">
-                <div className="p-4 border-b border-[var(--color-surface-200)] pb-4 shadow-sm bg-white z-10">
-                    <h2 className="font-bold text-[var(--color-text-main)] truncate" title={project.title}>
-                        {project.title}
-                    </h2>
-                    <p className="text-[10px] text-[var(--color-text-muted)] mt-1 uppercase tracking-wider font-bold">
-                        Workspace Files
-                    </p>
+                <div className="p-4 border-b border-[var(--color-surface-200)] pb-4 shadow-sm bg-white z-10 flex flex-col gap-3">
+                    <Link to="/dashboard" className="flex items-center gap-1 text-xs font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-primary-600)] transition-colors w-max">
+                        <ChevronLeft className="w-4 h-4" /> Back to Dashboard
+                    </Link>
+
+                    <div className="flex items-start justify-between group">
+                        {isEditingProject ? (
+                            <div className="flex items-center gap-1 w-full bg-[var(--color-surface-100)] p-1 rounded border border-[var(--color-primary-300)]">
+                                <input
+                                    autoFocus
+                                    className="w-full bg-transparent text-sm font-bold text-[var(--color-text-main)] outline-none px-1"
+                                    value={editingProjectTitle}
+                                    onChange={(e) => setEditingProjectTitle(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleProjectRenameSubmit()}
+                                />
+                                <button onClick={handleProjectRenameSubmit} className="p-1 hover:bg-green-100 text-green-700 rounded"><Check className="w-3 h-3" /></button>
+                                <button onClick={() => setIsEditingProject(false)} className="p-1 hover:bg-red-100 text-red-700 rounded"><X className="w-3 h-3" /></button>
+                            </div>
+                        ) : (
+                            <>
+                                <h2
+                                    className="font-bold text-[var(--color-text-main)] truncate cursor-pointer hover:text-[var(--color-primary-600)]"
+                                    title="Click to rename"
+                                    onClick={() => {
+                                        setEditingProjectTitle(project.title);
+                                        setIsEditingProject(true);
+                                    }}
+                                >
+                                    {project.title}
+                                </h2>
+                                <button
+                                    onClick={handleProjectDelete}
+                                    className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:bg-red-50 rounded transition-all shrink-0 ml-2"
+                                    title="Delete Project"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
                     {project.files?.map((file) => (
-                        <button
+                        <div
                             key={file._id}
-                            onClick={() => setActiveFileId(file._id)}
                             className={cn(
-                                "flex items-center gap-2 p-2 rounded-lg text-sm text-left transition-colors w-full",
+                                "group flex items-center justify-between p-2 rounded-lg text-sm transition-colors w-full cursor-pointer",
                                 activeFileId === file._id
                                     ? "bg-[var(--color-primary-100)] text-[var(--color-primary-900)] font-bold"
                                     : "text-[var(--color-text-main)] hover:bg-[var(--color-surface-100)]"
                             )}
+                            onClick={() => {
+                                if (editingFileId !== file._id) setActiveFileId(file._id);
+                            }}
                         >
-                            {file.originalName.endsWith('.md') ? <FileType2 className="w-4 h-4 shrink-0 text-blue-500" /> : <FileText className="w-4 h-4 shrink-0 opacity-70" />}
-                            <span className="truncate">{file.originalName}</span>
-                        </button>
+                            <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                {file.originalName.endsWith('.md') ? <FileType2 className="w-4 h-4 shrink-0 text-blue-500" /> : <FileText className="w-4 h-4 shrink-0 opacity-70" />}
+
+                                {editingFileId === file._id ? (
+                                    <input
+                                        autoFocus
+                                        className="w-full bg-white text-xs font-normal text-black outline-none px-1 rounded border border-blue-300"
+                                        value={editingFileName}
+                                        onChange={(e) => setEditingFileName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleFileRenameSubmit(file._id);
+                                            if (e.key === 'Escape') setEditingFileId(null);
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onBlur={() => handleFileRenameSubmit(file._id)}
+                                    />
+                                ) : (
+                                    <span className="truncate flex-1" title={file.originalName}>{file.originalName}</span>
+                                )}
+                            </div>
+
+                            {/* Hover Actions */}
+                            {editingFileId !== file._id && (
+                                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1 bg-white/50 backdrop-blur-sm rounded-sm">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setEditingFileName(file.originalName); setEditingFileId(file._id); }}
+                                        className="p-1 hover:text-blue-600 rounded"
+                                    >
+                                        <Edit2 className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                        onClick={(e) => handleFileDelete(file._id, e)}
+                                        className="p-1 hover:text-red-600 rounded"
+                                    >
+                                        <Trash2 className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     ))}
 
                     <Button
@@ -205,14 +399,24 @@ export function ProjectWorkspace() {
                 {activeFile && (
                     <div className="h-full flex flex-col overflow-hidden">
                         <div className="px-6 py-4 border-b border-[var(--color-surface-200)] flex justify-between items-center bg-white z-10">
-                            <h3 className="text-xl font-bold font-karla text-[var(--color-text-main)]">{activeFile.originalName}</h3>
+                            <div className="flex flex-col">
+                                <h3 className="text-xl font-bold font-karla text-[var(--color-text-main)]">{activeFile.originalName}</h3>
+                                {/* <span className="text-xs text-red-500 font-mono">DEBUG RAW LEN: {activeFile.content?.length || 0}</span> */}
+                            </div>
                             <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-text-muted)]">
                                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4 text-green-600" /> Saved</>}
                             </div>
                         </div>
 
                         <div className="flex-1 overflow-hidden relative" data-color-mode="light">
-                            {activeFile.originalName.endsWith('.md') ? (
+                            {loadedFileId !== activeFile._id ? (
+                                <div className="h-full w-full flex items-center justify-center p-8 bg-[var(--color-surface-50)]">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary-500)]" />
+                                        <p className="text-sm font-medium text-[var(--color-text-muted)] animate-pulse">Hydrating editor...</p>
+                                    </div>
+                                </div>
+                            ) : activeFile.originalName.endsWith('.md') ? (
                                 // Markdown Split Editor
                                 <div className="h-full w-full custom-md-editor">
                                     <style>{`

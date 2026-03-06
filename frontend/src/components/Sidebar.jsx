@@ -11,14 +11,15 @@ import {
     ChevronRight,
     UserCircle,
     LogIn,
-    FolderOpen
+    FolderOpen,
+    LogOut
 } from 'lucide-react';
 import { cn } from './Button';
 import useAuthStore from '../store/useAuthStore';
 import useProjectStore from '../store/useProjectStore';
 
 export function Sidebar({ isOpen, toggleSidebar }) {
-    const { isAuthenticated, user } = useAuthStore();
+    const { isAuthenticated, user, logout } = useAuthStore();
     const { projects, fetchAllProjects } = useProjectStore();
 
     React.useEffect(() => {
@@ -90,23 +91,32 @@ export function Sidebar({ isOpen, toggleSidebar }) {
 
             <div className="flex flex-col p-3 border-t border-white/20 gap-2">
                 {isAuthenticated ? (
-                    <NavLink
-                        to="/profile"
-                        className={({ isActive }) => cn(
-                            "flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-3 text-sm font-medium transition-all group overflow-hidden whitespace-nowrap",
-                            isActive ? "bg-white/20 text-white font-bold" : "text-white/70 hover:bg-white/10 hover:text-white"
-                        )}
-                        title={!isOpen ? "Profile" : undefined}
-                    >
-                        {user?.profilePic ? (
-                            <img src={user.profilePic} alt="profile" className="w-6 h-6 rounded-full shrink-0 object-cover border border-white/30" />
-                        ) : (
-                            <UserCircle className="h-6 w-6 shrink-0 transition-colors" />
-                        )}
-                        <span className={cn("transition-opacity duration-200 truncate", isOpen ? "opacity-100" : "opacity-0 hidden")}>
-                            {user?.username || 'Profile'}
-                        </span>
-                    </NavLink>
+                    <div className="flex items-center gap-1">
+                        <NavLink
+                            to="/profile"
+                            className={({ isActive }) => cn(
+                                "flex-1 flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-3 text-sm font-medium transition-all group overflow-hidden whitespace-nowrap",
+                                isActive ? "bg-white/20 text-white font-bold" : "text-white/70 hover:bg-white/10 hover:text-white"
+                            )}
+                            title={!isOpen ? "Profile" : undefined}
+                        >
+                            {user?.profilePic ? (
+                                <img src={user.profilePic} alt="profile" className="w-6 h-6 rounded-full shrink-0 object-cover border border-white/30" />
+                            ) : (
+                                <UserCircle className="h-6 w-6 shrink-0 transition-colors" />
+                            )}
+                            <span className={cn("transition-opacity duration-200 truncate", isOpen ? "opacity-100" : "opacity-0 hidden")}>
+                                {user?.username || 'Profile'}
+                            </span>
+                        </NavLink>
+                        <button
+                            onClick={logout}
+                            className="flex items-center justify-center p-2.5 rounded-[var(--radius-md)] text-white/70 hover:bg-red-500/20 hover:text-red-300 transition-colors shrink-0"
+                            title="Log Out"
+                        >
+                            <LogOut className="w-5 h-5 shrink-0" />
+                        </button>
+                    </div>
                 ) : (
                     <NavLink
                         to="/auth"

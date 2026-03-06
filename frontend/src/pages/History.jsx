@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FolderOpen, Plus, Clock, FileText } from 'lucide-react';
+import { FolderOpen, Plus, Clock, Trash2 } from 'lucide-react';
 import useProjectStore from '../store/useProjectStore';
 import useAuthStore from '../store/useAuthStore';
 import { Button } from '../components/Button';
@@ -9,9 +9,9 @@ import { useToast } from '../components/Toasts';
 
 export function History() {
     const navigate = useNavigate();
-    const { projects, fetchAllProjects, createProject, status } = useProjectStore();
+    const { projects, fetchAllProjects, createProject, deleteProject, status } = useProjectStore();
     const { user } = useAuthStore();
-    const { toast } = useToast();
+    const { toast, confirm } = useToast();
 
     useEffect(() => {
         if (user) {
@@ -20,14 +20,30 @@ export function History() {
     }, [user, fetchAllProjects]);
 
     const handleCreateProject = async () => {
-        const title = `Untitled Project`;
-        const newProject = await createProject(title);
+        const newProject = await createProject('');
         if (newProject) {
             toast({ title: 'Workspace Created', description: `Opened a new workspace`, variant: 'success' });
             navigate(`/project/${newProject._id}`);
         } else {
             toast({ title: 'Error', description: 'Failed to create workspace', variant: 'error' });
         }
+    };
+
+    const handleDeleteProject = (e, projectId) => {
+        e.stopPropagation();
+        confirm({
+            title: "Delete Project",
+            description: "Are you sure you want to delete this project? This action cannot be undone.",
+            confirmText: "Delete",
+            onConfirm: async () => {
+                const success = await deleteProject(projectId);
+                if (success) {
+                    toast({ title: 'Project Deleted', description: 'The project has been successfully removed.', variant: 'success' });
+                } else {
+                    toast({ title: 'Error', description: 'Failed to delete project.', variant: 'error' });
+                }
+            }
+        });
     };
 
     return (
@@ -84,6 +100,15 @@ export function History() {
                             onClick={() => navigate(`/project/${project._id}`)}
                             className="bg-white rounded-[var(--radius-xl)] p-6 shadow-[var(--shadow-card)] flex flex-col cursor-pointer hover:shadow-[var(--shadow-floating)] transition-all border border-[var(--color-surface-200)] group relative overflow-hidden"
                         >
+                            {/* Delete button — appears on hover */}
+                            <button
+                                onClick={(e) => handleDeleteProject(e, project._id)}
+                                className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-all"
+                                title="Delete Project"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+
                             {/* Decorative top border */}
                             <div className="absolute top-0 left-0 right-0 h-1 bg-[var(--color-primary-500)] opacity-0 group-hover:opacity-100 transition-opacity"></div>
 

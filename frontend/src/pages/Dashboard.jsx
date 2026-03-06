@@ -1,11 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     FileText,
-    CheckCircle,
     BookOpen,
-    Code2,
-    Plus
+    Plus,
+    Trash2
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { motion } from 'framer-motion';
@@ -15,25 +14,42 @@ import { useToast } from '../components/Toasts';
 
 export function Dashboard() {
     const navigate = useNavigate();
-    const user = useAuthStore(state => state.user);
-    const { recentProjects, fetchRecentProjects, createProject, status } = useProjectStore();
-    const { toast } = useToast();
+    const { user, token } = useAuthStore();
+    const { recentProjects, fetchRecentProjects, createProject, deleteProject, status } = useProjectStore();
+    const { toast, confirm } = useToast();
 
-    React.useEffect(() => {
-        if (user) {
+    useEffect(() => {
+        if (token) {
             fetchRecentProjects();
         }
-    }, [user, fetchRecentProjects]);
+    }, [token, fetchRecentProjects]);
 
     const handleCreateProject = async () => {
-        const title = `Project ${new Date().toLocaleDateString()}`;
-        const newProject = await createProject(title);
+        const newProject = await createProject(''); // Empty triggers auto-name "Untitled" / "Untitled (1)" in backend
         if (newProject) {
-            toast({ title: 'Project Created', description: `Started working on ${title}`, variant: 'success' });
+            toast({ title: 'Project Created', description: `Started working on ${newProject.title}`, variant: 'success' });
             navigate(`/project/${newProject._id}`);
         } else {
             toast({ title: 'Error', description: 'Failed to create project', variant: 'error' });
         }
+    };
+
+    const handleDeleteProject = (e, projectId) => {
+        e.stopPropagation(); // Prevent navigation to project workspace
+
+        confirm({
+            title: "Delete Project",
+            description: "Are you sure you want to delete this project? This action cannot be undone.",
+            confirmText: "Delete",
+            onConfirm: async () => {
+                const success = await deleteProject(projectId);
+                if (success) {
+                    toast({ title: 'Project Deleted', description: 'The project has been successfully removed.', variant: 'success' });
+                } else {
+                    toast({ title: 'Error', description: 'Failed to delete project.', variant: 'error' });
+                }
+            }
+        });
     };
 
     return (
@@ -68,13 +84,20 @@ export function Dashboard() {
                         </div>
                     </div>
 
-                    {/* Map Over Recent Projects */}
                     {recentProjects.map((project) => (
                         <div
                             key={project._id}
                             onClick={() => navigate(`/project/${project._id}`)} // Route directly to project workspace
-                            className="bg-white rounded-[var(--radius-xl)] p-6 shadow-[var(--shadow-card)] flex flex-col items-center justify-center text-center cursor-pointer hover:shadow-[var(--shadow-floating)] transition-all border border-[var(--color-surface-200)] group"
+                            className="relative bg-white rounded-[var(--radius-xl)] p-6 shadow-[var(--shadow-card)] flex flex-col items-center justify-center text-center cursor-pointer hover:shadow-[var(--shadow-floating)] transition-all border border-[var(--color-surface-200)] group"
                         >
+                            <button
+                                onClick={(e) => handleDeleteProject(e, project._id)}
+                                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-all"
+                                title="Delete Project"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+
                             <div className="w-16 h-16 mb-4 rounded-2xl bg-[var(--color-primary-50)] flex items-center justify-center border-2 border-[var(--color-primary-100)] group-hover:scale-105 transition-transform shadow-inner">
                                 <FileText className="w-8 h-8 text-[var(--color-primary-900)] stroke-[1.5]" />
                             </div>
@@ -82,7 +105,7 @@ export function Dashboard() {
                                 {project.title}
                             </h3>
                             <p className="text-[10px] text-[var(--color-text-muted)] mt-2 font-medium uppercase tracking-wider">
-                                {project.status}
+                                {project.status || 'Draft'}
                             </p>
                         </div>
                     ))}
