@@ -38,10 +38,10 @@ export function Configure() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="max-w-4xl mx-auto py-8"
+            className="max-w-3xl mx-auto py-8 px-4"
         >
             <div className="text-center mb-10">
-                <h1 className="text-3xl font-bold Tracking-tight mb-2">Configure Processing</h1>
+                <h1 className="text-4xl font-anton font-normal tracking-wide text-[var(--color-text-main)] mb-2">Configure Processing</h1>
                 <p className="text-[var(--color-text-muted)]">Select the target style and journal template for output formatting.</p>
             </div>
 
@@ -98,7 +98,7 @@ export function Configure() {
                             </select>
                         </div>
 
-                        <div>
+                        {/* <div>
                             <label className="block text-sm font-medium text-[var(--color-text-main)] mb-2">Journal Template</label>
                             <select
                                 className="w-full rounded-[var(--radius-md)] border border-[var(--color-surface-300)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)] focus:border-transparent"
@@ -109,7 +109,7 @@ export function Configure() {
                                     <option key={template} value={template}>{template}</option>
                                 ))}
                             </select>
-                        </div>
+                        </div> */}
                     </CardContent>
                 </Card>
 

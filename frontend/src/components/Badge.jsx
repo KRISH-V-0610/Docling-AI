@@ -11,8 +11,8 @@ export function Badge({ children, variant = 'default', className, ...props }) {
 
         // Specific business logic variants
         Pending: "bg-[var(--color-surface-200)] text-[var(--color-text-muted)]",
-        Running: "bg-blue-100 text-blue-700 animate-pulse",
-        Done: "bg-green-100 text-green-700",
+        Running: "bg-[var(--color-surface-200)] text-[var(--color-primary-900)] animate-pulse border border-[var(--color-surface-300)]",
+        Done: "bg-[var(--color-primary-50)] text-[var(--color-primary-600)] border border-[var(--color-primary-100)]",
         Low: "bg-blue-50 text-blue-600 border border-blue-200",
         Medium: "bg-yellow-50 text-yellow-600 border border-yellow-200",
         High: "bg-red-50 text-red-600 border border-red-200",

@@ -1,22 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary-50: #eef2ff;
-  --color-primary-100: #e0e7ff;
-  --color-primary-500: #6366f1;
-  /* Indigo matching image */
-  --color-primary-600: #4f46e5;
-  --color-primary-900: #312e81;
-  /* Dark variation */
+  /* Earthy Palette */
+  --color-primary-50: #fdfceb;
+  /* Very light cornsilk */
+  --color-primary-100: #dda15e;
+  /* Light Caramel */
+  --color-primary-500: #606c38;
+  /* Olive Leaf */
+  --color-primary-600: #283618;
+  /* Black Forest (Darker Olive) */
+  --color-primary-900: #bc6c25;
+  /* Copper */
 
-  --color-surface-50: #f8fafc;
-  /* Very soft blue-gray background */
-  --color-surface-100: #f1f5f9;
-  --color-surface-200: #e2e8f0;
-  --color-surface-300: #cbd5e1;
+  --color-surface-50: #fefae0;
+  /* Cornsilk (Base Background) */
+  --color-surface-100: #f4efd3;
+  /* Slightly darker cornsilk for offset areas */
+  --color-surface-200: #e6dfbd;
+  /* Borders and hover states */
+  --color-surface-300: #d4caa3;
+  /* Deeper borders */
 
-  --color-text-main: #0f172a;
-  --color-text-muted: #64748b;
+  --color-text-main: #283618;
+  /* Black Forest for main text */
+  --color-text-muted: #606c38;
+  /* Olive Leaf for muted text */
 
   --shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
@@ -26,12 +35,26 @@
   --radius-lg: 1.25rem;
   --radius-xl: 2rem;
   /* Much rounder */
+  --font-sans: "Karla", ui-sans-serif, system-ui, sans-serif;
+  --font-anton: "Anton", sans-serif;
+
+  --animate-shimmer: shimmer 2s infinite linear;
+
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+
+    100% {
+      transform: translateX(100%);
+    }
+  }
 }
 
 @layer base {
   body {
     @apply bg-[var(--color-surface-50)] text-[var(--color-text-main)] antialiased;
-    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: var(--font-sans);
   }
 }
 

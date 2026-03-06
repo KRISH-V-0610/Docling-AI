@@ -59,10 +59,10 @@ export function Upload() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="max-w-4xl mx-auto py-8"
+            className="max-w-3xl mx-auto py-8 px-4"
         >
             <div className="text-center mb-10">
-                <h1 className="text-3xl font-bold Tracking-tight mb-2">Upload Manuscript</h1>
+                <h1 className="text-4xl font-anton font-normal tracking-wide text-[var(--color-text-main)] mb-2">Upload Manuscript</h1>
                 <p className="text-[var(--color-text-muted)]">Upload your `.docx` file to begin the automated formatting process.</p>
             </div>
 
@@ -108,8 +108,8 @@ export function Upload() {
                             exit={{ opacity: 0, scale: 0.95 }}
                             className="flex flex-col items-center justify-center py-8"
                         >
-                            <div className="w-24 h-24 bg-blue-50 rounded-[var(--radius-xl)] flex items-center justify-center border border-blue-100 shadow-sm mb-6">
-                                <File className="w-12 h-12 text-blue-500" />
+                            <div className="w-24 h-24 bg-[var(--color-primary-50)] rounded-[var(--radius-xl)] flex items-center justify-center border border-[var(--color-primary-100)] shadow-sm mb-6">
+                                <File className="w-12 h-12 text-[var(--color-primary-600)]" />
                             </div>
                             <h3 className="text-xl font-medium text-[var(--color-text-main)] mb-2 truncate max-w-xs">{uploadedFile.name}</h3>
                             <p className="text-sm text-[var(--color-text-muted)] mb-8">

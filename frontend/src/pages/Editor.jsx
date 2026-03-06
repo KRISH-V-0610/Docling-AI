@@ -3,8 +3,6 @@ import { motion } from 'framer-motion';
 import { Download, ChevronRight } from 'lucide-react';
 import { Button } from '../components/Button';
 import { SplitEditors } from '../components/SplitEditors';
-import { SuggestionPanel } from '../components/SuggestionPanel';
-import { ValidationReport } from '../components/ValidationReport';
 import { useToast } from '../components/Toasts';
 import useAppStore from '../store/useAppStore';
 
@@ -72,43 +70,28 @@ export function Editor() {
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex flex-col h-full max-w-7xl mx-auto pt-2 pb-6 px-4 md:px-0"
+            className="flex flex-col h-full w-full pt-4 pb-2 px-2"
         >
 
             {/* Top Bar / Breadcrumb */}
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
+            <div className="flex items-center justify-between mb-2 shrink-0">
+                <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)] pl-2">
                     <span className="hover:text-[var(--color-text-main)] cursor-pointer transition-colors">Documents</span>
                     <ChevronRight className="w-4 h-4" />
                     <span className="font-semibold text-[var(--color-text-main)] max-w-[200px] sm:max-w-xs truncate">
                         {uploadedFile ? uploadedFile.name : 'Untitled Document'}
                     </span>
                 </div>
-
-               
             </div>
 
             {/* Main Workspace Area */}
-            <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-14rem)] min-h-[500px]">
-
-                {/* Editors Container (Left 70%) */}
-                <div className="flex-1 h-full min-w-0">
-                    <SplitEditors
-                        originalContent={originalContent}
-                        convertedContent={convertedContent}
-                        onConvertedChange={setConvertedContent}
-                    />
-                </div>
-
-                {/* Suggestion Panel (Right 30%) */}
-                <div className="w-full lg:w-80 flex-shrink-0 h-[400px] lg:h-full">
-                    <SuggestionPanel />
-                </div>
-
+            <div className="flex-1 min-h-[500px] w-full mt-2">
+                <SplitEditors
+                    originalContent={originalContent}
+                    convertedContent={convertedContent}
+                    onConvertedChange={setConvertedContent}
+                />
             </div>
-
-            {/* Validation Report Area */}
-            <ValidationReport />
 
         </motion.div>
     );

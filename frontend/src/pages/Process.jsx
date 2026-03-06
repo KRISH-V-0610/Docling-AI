@@ -131,10 +131,10 @@ export function Process() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="max-w-4xl mx-auto py-8"
+            className="max-w-3xl mx-auto py-8 px-4"
         >
             <div className="text-center mb-10">
-                <h1 className="text-3xl font-bold Tracking-tight mb-2">Processing Document</h1>
+                <h1 className="text-4xl font-anton font-normal tracking-wide text-[var(--color-text-main)] mb-2">Processing Document</h1>
                 <p className="text-[var(--color-text-muted)]">Applying formatting rules and generating output.</p>
             </div>
 
@@ -145,7 +145,7 @@ export function Process() {
 
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-semibold text-[var(--color-text-main)] flex items-center gap-2">
-                            {isProcessingDone ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <Play className="h-5 w-5 text-[var(--color-primary-500)] animate-pulse" />}
+                            {isProcessingDone ? <CheckCircle2 className="h-5 w-5 text-[var(--color-primary-600)]" /> : <Play className="h-5 w-5 text-[var(--color-primary-500)] animate-pulse" />}
                             {isProcessingDone ? "Processing Complete" : "Processing..."}
                         </span>
                         <span className="text-sm font-medium text-[var(--color-text-muted)]">{processingProgress}%</span>

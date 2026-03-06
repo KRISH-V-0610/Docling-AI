@@ -8,14 +8,28 @@ import {
     CheckCircle,
     Settings,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    UserCircle,
+    LogIn,
+    FolderOpen
 } from 'lucide-react';
 import { cn } from './Button';
+import useAuthStore from '../store/useAuthStore';
+import useProjectStore from '../store/useProjectStore';
 
 export function Sidebar({ isOpen, toggleSidebar }) {
+    const { isAuthenticated, user } = useAuthStore();
+    const { projects, fetchAllProjects } = useProjectStore();
+
+    React.useEffect(() => {
+        if (isAuthenticated) {
+            fetchAllProjects();
+        }
+    }, [isAuthenticated, fetchAllProjects]);
+
     const navItems = [
-        { name: 'Documents', path: '/', icon: FileText },
-        { name: 'Upload Manuscript', path: '/upload', icon: Upload },
+        { name: 'Dashboard', path: '/dashboard', icon: FileText },
+        { name: 'Projects History', path: '/history', icon: Upload },
         { name: 'Formatting Editor', path: '/editor', icon: PenTool },
         { name: 'LaTeX Editor', path: '/latex', icon: Code2 },
         { name: 'Validation Report', path: '/reports', icon: CheckCircle },
@@ -26,12 +40,22 @@ export function Sidebar({ isOpen, toggleSidebar }) {
         <aside
             className={cn(
                 "z-30 flex h-full flex-col bg-[var(--color-primary-500)] rounded-[var(--radius-xl)] shadow-[var(--shadow-card)] transition-all duration-300 ease-in-out overflow-hidden text-white",
-                isOpen ? "w-64" : "w-16"
+                isOpen ? "w-64" : "w-18"
             )}
         >
-            <div className="flex h-16 items-center justify-center p-4">
-                <div className="flex w-10 h-10 items-center justify-center bg-white text-[var(--color-primary-600)] rounded-[var(--radius-md)]">
-                    <FileText className="h-5 w-5" />
+            <div className="flex h-20 items-center p-4">
+                <div className="flex items-center gap-3 overflow-hidden">
+                    <img
+                        src="/duck-logo.png"
+                        alt="Docling"
+                        className="w-10 h-10 rounded-[var(--radius-md)] object-cover shadow-sm shrink-0 bg-[#fdfceb]"
+                    />
+                    <span className={cn(
+                        "text-[#fdfceb] font-extrabold text-4xl tracking-tighter font-karla my-2 mb-2 whitespace-nowrap transition-opacity duration-200",
+                        isOpen ? "opacity-100" : "opacity-0 hidden"
+                    )}>
+                        Docling
+                    </span>
                 </div>
             </div>
 
@@ -41,7 +65,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
 
                     return (
                         <React.Fragment key={item.path}>
-                            {isDivider && <div className="my-2 border-t border-white/20" />}
+                            {/* {isDivider && <div className="my-2 border-t border-white/20" />} */}
 
                             <NavLink
                                 to={item.path}
@@ -66,10 +90,44 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                 })}
             </div>
 
-            <div className="flex p-3 border-t border-white/20">
+            <div className="flex flex-col p-3 border-t border-white/20 gap-2">
+                {isAuthenticated ? (
+                    <NavLink
+                        to="/profile"
+                        className={({ isActive }) => cn(
+                            "flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-3 text-sm font-medium transition-all group overflow-hidden whitespace-nowrap",
+                            isActive ? "bg-white/20 text-white font-bold" : "text-white/70 hover:bg-white/10 hover:text-white"
+                        )}
+                        title={!isOpen ? "Profile" : undefined}
+                    >
+                        {user?.profilePic ? (
+                            <img src={user.profilePic} alt="profile" className="w-6 h-6 rounded-full shrink-0 object-cover border border-white/30" />
+                        ) : (
+                            <UserCircle className="h-6 w-6 shrink-0 transition-colors" />
+                        )}
+                        <span className={cn("transition-opacity duration-200 truncate", isOpen ? "opacity-100" : "opacity-0 hidden")}>
+                            {user?.username || 'Profile'}
+                        </span>
+                    </NavLink>
+                ) : (
+                    <NavLink
+                        to="/auth"
+                        className={({ isActive }) => cn(
+                            "flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-3 text-sm font-medium transition-all group overflow-hidden whitespace-nowrap",
+                            isActive ? "bg-white/20 text-white font-bold" : "text-white/70 hover:bg-white/10 hover:text-white"
+                        )}
+                        title={!isOpen ? "Log In" : undefined}
+                    >
+                        <LogIn className="h-6 w-6 shrink-0 transition-colors" />
+                        <span className={cn("transition-opacity duration-200", isOpen ? "opacity-100" : "opacity-0 hidden")}>
+                            Log In
+                        </span>
+                    </NavLink>
+                )}
+
                 <button
                     onClick={toggleSidebar}
-                    className="flex w-full items-center justify-center rounded-[var(--radius-md)] p-2 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                    className="flex w-full items-center justify-center rounded-[var(--radius-md)] p-2 text-white/70 hover:bg-white/10 hover:text-white transition-colors mt-2"
                 >
                     {isOpen ? <ChevronLeft className="h-6 w-6" /> : <ChevronRight className="h-6 w-6" />}
                 </button>

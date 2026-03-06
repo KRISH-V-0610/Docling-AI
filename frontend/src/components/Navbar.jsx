@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Search, LayoutDashboard, Component, Link as LinkIcon, Bell, Settings, Sun, Moon, Download, Plus } from 'lucide-react';
+import { Search, LayoutDashboard, Component, Link as LinkIcon, Bell, Settings } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from './Button';
 
@@ -21,16 +21,10 @@ export function Navbar() {
             </nav>
 
             {/* Middle Search */}
-          
 
-            {/* Right Tools */}
+
+            {/* Right Tools - Blank for now */}
             <div className="flex items-center gap-4">
-
-                {/* Theme Toggle placeholder */}
-                
-
-                
-
             </div>
         </header>
     );
