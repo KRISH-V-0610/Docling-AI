@@ -1,15 +1,63 @@
 import React, { useRef, useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import { Play, FileDown, Code, FileText, CheckCircle, ImagePlus, X } from 'lucide-react';
+import { Play, FileDown, Code, FileText, CheckCircle, ImagePlus, X, ListOrdered, ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '../components/Button';
 import useAppStore from '../store/useAppStore';
 
 export function Latex() {
     const { latexContent, setLatexContent } = useAppStore();
     const formRef = useRef(null);
+    const editorRef = useRef(null);
     const [compiling, setCompiling] = useState(false);
     const [compiled, setCompiled] = useState(false);
     const [assets, setAssets] = useState([]);
+    const [outline, setOutline] = useState([]);
+    const [expandedSections, setExpandedSections] = useState({});
+
+    // Parse LaTeX content for sections
+    useEffect(() => {
+        if (!latexContent) {
+            setOutline([]);
+            return;
+        }
+
+        const lines = latexContent.split('\n');
+        const newOutline = [];
+
+        // Regex to match \section{title}, \subsection{title}, \subsubsection{title}
+        const sectionRegex = /^\\(sub)*section\*?\{([^}]+)\}/;
+
+        lines.forEach((line, index) => {
+            const match = line.trim().match(sectionRegex);
+            if (match) {
+                const level = match[1] ? match[1].length / 3 + 1 : 1; // section=1, subsection=2, subsubsection=3
+                const title = match[2];
+                newOutline.push({
+                    title,
+                    level,
+                    line: index + 1, // Monaco lines are 1-indexed
+                    id: `sec-${index}`
+                });
+            }
+        });
+
+        setOutline(newOutline);
+    }, [latexContent]);
+
+    const handleOutlineClick = (lineNumber) => {
+        if (editorRef.current) {
+            editorRef.current.revealLineInCenter(lineNumber);
+            editorRef.current.setPosition({ lineNumber, column: 1 });
+            editorRef.current.focus();
+        }
+    };
+
+    const toggleSection = (id) => {
+        setExpandedSections(prev => ({
+            ...prev,
+            [id]: !prev[id]
+        }));
+    };
 
     const handleFileUpload = (e) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -203,9 +251,74 @@ export function Latex() {
             </div>
 
             {/* Split Workspace */}
-            <div className="flex flex-1 flex-col lg:flex-row min-h-0 bg-[var(--color-surface-100)]">
+            <div className="flex flex-1 flex-row min-h-0 bg-[var(--color-surface-100)]">
 
-                {/* Editor Section (Left) */}
+                {/* Outline Sidebar (Left) */}
+                <div className="hidden md:flex flex-col w-64 bg-[#1e1e1e] border-r border-[#333] shrink-0 text-[#cccccc] overflow-hidden select-none">
+                    <div className="flex items-center px-4 py-3 border-b border-[#333] shrink-0">
+                        <ListOrdered className="h-4 w-4 mr-2" />
+                        <span className="text-xs font-semibold uppercase tracking-wider">File Outline</span>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto py-2">
+                        {outline.length === 0 ? (
+                            <div className="px-4 py-4 text-xs text-[#888] italic text-center">
+                                No sections found. Use \section&#123;...&#125; to build an outline.
+                            </div>
+                        ) : (
+                            <div className="flex flex-col">
+                                {outline.map((item, index) => {
+                                    // Calculate precise indentation based on level (1, 2, 3)
+                                    const indentClass = item.level === 1 ? 'pl-4' : item.level === 2 ? 'pl-8' : 'pl-12';
+                                    const fontSizeClass = item.level === 1 ? 'text-[13px] font-medium text-white' : item.level === 2 ? 'text-[12px] text-[#e0e0e0]' : 'text-[11px] text-[#b0b0b0]';
+                                    const isExpanded = expandedSections[item.id] !== false; // Default true
+
+                                    // Check if this item has children
+                                    const hasChildren = index < outline.length - 1 && outline[index + 1].level > item.level;
+
+                                    return (
+                                        <div key={item.id} className="group relative">
+                                            {/* Active/Hover Background styled to match VS Code outline */}
+                                            <div
+                                                className={`flex items-center w-full py-1 cursor-pointer hover:bg-[#2a2d2e] transition-colors ${indentClass}`}
+                                                onClick={() => handleOutlineClick(item.line)}
+                                            >
+                                                {/* Left border indicator for sections */}
+                                                {item.level === 1 && (
+                                                    <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-transparent group-hover:bg-[#007acc]"></div>
+                                                )}
+
+                                                <div
+                                                    className="w-4 h-4 mr-1 flex items-center justify-center shrink-0"
+                                                    onClick={(e) => {
+                                                        if (hasChildren) {
+                                                            e.stopPropagation();
+                                                            toggleSection(item.id);
+                                                        }
+                                                    }}
+                                                >
+                                                    {hasChildren ? (
+                                                        isExpanded ?
+                                                            <ChevronDown className="h-3.5 w-3.5 text-[#888] hover:text-[#ccc]" /> :
+                                                            <ChevronRight className="h-3.5 w-3.5 text-[#888] hover:text-[#ccc]" />
+                                                    ) : (
+                                                        <span className="w-3.5" /> // Spacer
+                                                    )}
+                                                </div>
+
+                                                <span className={`${fontSizeClass} truncate pr-4 block`} title={item.title}>
+                                                    {item.title}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Editor Section (Middle) */}
                 <div
                     className="flex flex-col flex-1 lg:w-1/2 bg-white border-r border-[var(--color-surface-300)] overflow-hidden"
                     onDragOver={handleDragOver}
@@ -259,6 +372,9 @@ export function Latex() {
                             onChange={setLatexContent}
                             theme="vs-light"
                             onMount={(editor, monaco) => {
+                                // Add editorRef capturing
+                                editorRef.current = editor;
+
                                 // Add a custom command that will dispatch a synthetic keydown
                                 // event to the window so the `useEffect` hook with the fresh
                                 // `handleCompile` closure in the broader component scope 

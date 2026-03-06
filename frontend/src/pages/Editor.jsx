@@ -20,6 +20,41 @@ export function Editor() {
         });
     };
 
+    const handleDownload = () => {
+        if (!convertedContent) {
+            toast({
+                title: "Error",
+                description: "There is no content to download.",
+                variant: "error"
+            });
+            return;
+        }
+
+        const blob = new Blob([convertedContent], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+
+        let rootName = 'Document';
+        if (uploadedFile && uploadedFile.name) {
+            // Strip extension if present
+            const dotIndex = uploadedFile.name.lastIndexOf('.');
+            rootName = dotIndex !== -1 ? uploadedFile.name.substring(0, dotIndex) : uploadedFile.name;
+        }
+
+        a.download = `${rootName}_formatted.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        toast({
+            title: "Download Started",
+            description: `Downloading ${a.download}`,
+            variant: 'success'
+        });
+    };
+
     // Setup Ctrl+S shortcut
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -46,18 +81,11 @@ export function Editor() {
                     <span className="hover:text-[var(--color-text-main)] cursor-pointer transition-colors">Documents</span>
                     <ChevronRight className="w-4 h-4" />
                     <span className="font-semibold text-[var(--color-text-main)] max-w-[200px] sm:max-w-xs truncate">
-                        {uploadedFile ? uploadedFile.name : 'Sample_Manuscript_draft_final.docx'}
+                        {uploadedFile ? uploadedFile.name : 'Untitled Document'}
                     </span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <Button variant="secondary" size="sm" onClick={handleSave}>
-                        Save Draft
-                    </Button>
-                    <Button variant="primary" size="sm" className="hidden sm:flex" onClick={() => toast({ title: "Started Download", description: "Your DOCX file is downloading." })}>
-                        <Download className="w-4 h-4 mr-2" /> Download Document
-                    </Button>
-                </div>
+               
             </div>
 
             {/* Main Workspace Area */}
