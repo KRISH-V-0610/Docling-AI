@@ -86,17 +86,7 @@ export function Configure() {
                             />
                         </div>
 
-                        <div className="mb-6">
-                            <label className="block text-sm font-medium text-[var(--color-text-main)] mb-2">LLM Engine</label>
-                            <select
-                                className="w-full rounded-[var(--radius-md)] border border-[var(--color-surface-300)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)] focus:border-transparent"
-                                value={llmEngine}
-                                onChange={(e) => setLlmEngine(e.target.value)}
-                            >
-                                <option value="meta-llama/llama-4-maverick-17b-128e-instruct">LLaMA-4-Maverick 17b</option>
-                                <option value="qwen/qwen3-32b">Qwen-3 32b</option>
-                            </select>
-                        </div>
+
 
                         {/* <div>
                             <label className="block text-sm font-medium text-[var(--color-text-main)] mb-2">Journal Template</label>

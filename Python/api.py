@@ -230,6 +230,7 @@ WHEN A USER ASKS FOR HELP:
 6. If they hit a wall, be honest — use `get_known_limitations` and suggest workarounds
 
 IMPORTANT RULES:
+-When using a tool, call the exact tool name only. Never add braces, parentheses, XML tags, or extra characters to the tool name.
 - NEVER pretend to edit or refine content yourself. Always redirect to the appropriate tool.
 - ALWAYS acknowledge limitations honestly when asked.
 - Suggest the future roadmap when relevant — we're building a complete research ecosystem.
@@ -363,13 +364,29 @@ async def reconstruct_stream_endpoint(
             return
             
         yield f"data: {{ \"log\": \"Running spellchecker...\" }}\n\n"
+        await asyncio.sleep(0.1)
         
         spell = SpellChecker()
         words = re.findall(r'\b[a-zA-Z]+\b', text)
+        yield f"data: {{ \"log\": \"Extracted {len(words)} words for spelling analysis.\" }}\n\n"
+        await asyncio.sleep(0.1)
+
         misspelled = list({word for word in spell.unknown(words) if len(word) > 2})
-        corrections = {word: spell.correction(word) for word in misspelled}
+        yield f"data: {{ \"log\": \"Identified {len(misspelled)} potentially misspelled words. Generating corrections...\" }}\n\n"
+        await asyncio.sleep(0.1)
         
-        yield f"data: {{ \"log\": \"Found {len(misspelled)} spelling errors.\", \"errors\": {json.dumps(misspelled)}, \"corrections\": {json.dumps(corrections)} }}\n\n"
+        corrections = {}
+        processed = 0
+        total_missed = len(misspelled)
+        
+        for word in misspelled:
+            corrections[word] = spell.correction(word)
+            processed += 1
+            if processed % max(1, total_missed // 5) == 0 or processed == total_missed:
+                yield f"data: {{ \"log\": \"Generated corrections for {processed}/{total_missed} words...\" }}\n\n"
+                await asyncio.sleep(0.1)
+        
+        yield f"data: {{ \"log\": \"Spell checking complete. Found {total_missed} spelling errors.\", \"errors\": {json.dumps(misspelled)}, \"corrections\": {json.dumps(corrections)} }}\n\n"
         
         yield f"data: {{ \"log\": \"Bifurcating text into conceptual chunks...\" }}\n\n"
         chunks = chunk_text(text, max_words=800)
