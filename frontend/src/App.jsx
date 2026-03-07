@@ -16,6 +16,7 @@ import { Process } from './pages/Process';
 import { ValidationArea } from './pages/ValidationArea';
 import { ValidationReport } from './components/ValidationReport';
 import { AdvanceWorkspace } from './pages/AdvanceWorkspace';
+import { DeepScan } from './pages/DeepScan';
 import useAuthStore from './store/useAuthStore';
 
 function PlaceholderPage({ title }) {
@@ -98,6 +99,7 @@ function App() {
             <Route path="/history" element={<History />} />
             <Route path="/project/:id" element={<ProjectWorkspace />} />
             <Route path="/process" element={<Process />} />
+            <Route path="/deep-scan" element={<DeepScan />} />
             <Route path="/advance-workshop" element={<AdvanceWorkspace />} />
             <Route path="/validation/:projectId/:originalId/:reconstructedId" element={<ValidationArea />} />
           </Route>

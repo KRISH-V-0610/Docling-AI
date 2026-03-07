@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { FileText, UploadCloud, FileType2, Loader2, Save, Plus, ChevronLeft, Trash2, Edit2, Check, X, Code2, Wand2, Settings, Play, FileDown, ListOrdered, ChevronDown, ChevronRight, ImagePlus } from 'lucide-react';
+import { FileText, UploadCloud, FileType2, Loader2, Save, Plus, ChevronLeft, Trash2, Edit2, Check, X, Code2, Wand2, Microscope, Settings, Play, FileDown, ListOrdered, ChevronDown, ChevronRight, ImagePlus } from 'lucide-react';
 import { Button, cn } from '../components/Button';
 import { useToast } from '../components/Toasts';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -37,7 +37,7 @@ export function ProjectWorkspace() {
 
     const { renameProject, deleteProject } = useProjectStore();
     const { toast, confirm } = useToast();
-    const { latexContent, setLatexContent, targetStyle, setTargetStyle, customRules, setCustomRules, llmEngine, setLlmEngine, setUploadedFile, setReconstructProjectId, setReconstructSourceFileName } = useAppStore();
+    const { latexContent, setLatexContent, targetStyle, setTargetStyle, customRules, setCustomRules, llmEngine, setLlmEngine, setUploadedFile, setReconstructProjectId, setReconstructSourceFileName, setDeepScanProjectId, setDeepScanSourceFileName } = useAppStore();
     const fileInputRef = useRef(null);
     const saveTimeoutRef = useRef(null);
 
@@ -415,6 +415,29 @@ export function ProjectWorkspace() {
         navigate('/process');
     };
 
+    const handleDeepScanStart = () => {
+        if (!activeFile) {
+            toast({ title: 'No file selected', description: 'Please select a file to deep scan.', variant: 'error' });
+            return;
+        }
+
+        const content = activeFile.content || '';
+        const plainText = content.replace(/<[^>]*>/g, '\n').replace(/&nbsp;/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+
+        const blob = new Blob([plainText], { type: 'text/plain' });
+        const origName = activeFile.originalName || 'document.txt';
+        const baseName = origName.replace(/\.[^.]+$/, '');
+
+        // Deep Scan accepts .docx, .pdf, and .txt. Since we only have reconstructed plain text here in activeFile,
+        // we must send it as .txt so python-docx doesn't crash trying to parse a plain-text file as a zip-based docx.
+        const fileName = `${baseName}.txt`;
+        const deepScanFile = new File([blob], fileName, { type: 'text/plain' });
+
+        setUploadedFile(deepScanFile);
+        setDeepScanProjectId(id);
+        setDeepScanSourceFileName(origName.replace(/\.[^.]+$/, ''));
+        navigate('/deep-scan');
+    };
 
     if (loading) {
         return <div className="flex h-full items-center justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary-500)]" /></div>;
@@ -567,6 +590,14 @@ export function ProjectWorkspace() {
                                 >
                                     <Wand2 className="w-3.5 h-3.5" />
                                     Reconstruct
+                                </button>
+                                <button
+                                    onClick={handleDeepScanStart}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-lg shadow-sm transition-all"
+                                    title="Deep Scan: regex formatting + LLM LaTeX generation"
+                                >
+                                    <Microscope className="w-3.5 h-3.5" />
+                                    Deep Scan
                                 </button>
                             </div>
                             <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-text-muted)]">
@@ -798,7 +829,7 @@ export function ProjectWorkspace() {
                                         onChange={(e) => setCustomRules(e.target.value)}
                                     />
                                 </div>
-
+{/* 
                                 <div>
                                     <label className="block text-xs font-semibold text-[var(--color-text-main)] mb-2">LLM Engine</label>
                                     <select
@@ -809,7 +840,7 @@ export function ProjectWorkspace() {
                                         <option value="meta-llama/llama-4-maverick-17b-128e-instruct">LLaMA-4-Maverick 17b</option>
                                         <option value="qwen/qwen3-32b">Qwen-3 32b</option>
                                     </select>
-                                </div>
+                                </div> */}
                             </div>
 
                             {/* Processing Options */}

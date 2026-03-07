@@ -26,6 +26,12 @@ const useAppStore = create((set) => ({
     reconstructSourceFileName: '',
     setReconstructSourceFileName: (name) => set({ reconstructSourceFileName: name }),
 
+    // Deep Scan context (project to write result back to)
+    deepScanProjectId: null,
+    setDeepScanProjectId: (id) => set({ deepScanProjectId: id }),
+    deepScanSourceFileName: '',
+    setDeepScanSourceFileName: (name) => set({ deepScanSourceFileName: name }),
+
     // Agent Status (Pending, Running, Done)
     agents: {
         parse: { status: 'Pending', progress: 0 },
