@@ -34,8 +34,10 @@ export function ValidationReport() {
 
                             const originalName = file.originalName || '';
                             const basename = originalName.replace(/\.[^.]+$/, '');
-                            const reconstructedFileName = `${basename}_reconstructed.md`;
-                            const reconstructedFile = project.files.find(f => f.originalName === reconstructedFileName);
+                            const reconstructedFile = project.files.find(f =>
+                                f.originalName.startsWith(basename + '_') &&
+                                f.originalName.endsWith('_reconstructed.md')
+                            );
 
                             // Calculate total and fixed issues for this specific file
                             const totalIssues = file.validationReport.length;

@@ -99,6 +99,7 @@ export function Process() {
 
                         try {
                             const payload = JSON.parse(chunk.substring(6));
+                            console.log("Process API Payload:", payload);
 
                             if (payload.log && isMounted) {
                                 addProcessLog({ time: new Date().toLocaleTimeString(), message: payload.log });
