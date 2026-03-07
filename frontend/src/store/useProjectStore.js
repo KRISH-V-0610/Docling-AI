@@ -3,11 +3,34 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/projects';
 
+const RECENT_KEY = 'dockling_recent_projects';
+
+function loadRecentsFromStorage() {
+    try {
+        const raw = localStorage.getItem(RECENT_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+}
+
+function saveRecentsToStorage(recents) {
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(recents)); } catch { }
+}
+
 const useProjectStore = create((set, get) => ({
     projects: [],
-    recentProjects: [],
+    recentProjects: loadRecentsFromStorage(),
     status: 'idle', // 'idle' | 'loading' | 'error' | 'success'
     errorMessage: null,
+
+    // Record a project visit → keep last 2, persist to localStorage
+    recordVisit: (project) => {
+        if (!project?._id) return;
+        const slim = { _id: project._id, title: project.title, updatedAt: project.updatedAt };
+        const existing = get().recentProjects.filter(p => p._id !== slim._id);
+        const next = [slim, ...existing].slice(0, 2);
+        saveRecentsToStorage(next);
+        set({ recentProjects: next });
+    },
 
     fetchRecentProjects: async () => {
         const token = localStorage.getItem('token');
@@ -51,9 +74,11 @@ const useProjectStore = create((set, get) => ({
 
             // Optimistically update lists
             const newProject = res.data;
+            const updatedRecents = [newProject, ...get().recentProjects.filter(p => p._id !== newProject._id)].slice(0, 2);
+            saveRecentsToStorage(updatedRecents);
             set((state) => ({
                 projects: [newProject, ...state.projects],
-                recentProjects: [newProject, ...state.recentProjects.slice(0, 1)], // Keep max 2
+                recentProjects: updatedRecents,
                 status: 'success'
             }));
 
@@ -98,7 +123,11 @@ const useProjectStore = create((set, get) => ({
             // Optimistically remove from lists
             set((state) => ({
                 projects: state.projects.filter(p => p._id !== id),
-                recentProjects: state.recentProjects.filter(p => p._id !== id),
+                recentProjects: (() => {
+                    const next = state.recentProjects.filter(p => p._id !== id);
+                    saveRecentsToStorage(next);
+                    return next;
+                })(),
             }));
 
             return true;

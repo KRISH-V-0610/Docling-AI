@@ -26,7 +26,7 @@ import useDeepScanStore from '../store/useDeepScanStore';
 
 export function Sidebar({ isOpen, toggleSidebar }) {
     const { isAuthenticated, user, logout } = useAuthStore();
-    const { projects, fetchAllProjects } = useProjectStore();
+    const { projects, fetchAllProjects, recentProjects } = useProjectStore();
     const { isProcessing } = useAppStore();
     const dsStep = useDeepScanStore(s => s.currentStep);
     const dsDone = useDeepScanStore(s => s.isProcessingDone);
@@ -170,6 +170,49 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                     );
                 })}
             </div>
+
+            {/* ── Recent Projects ──────────────────── */}
+            {isOpen && (
+                <div className="px-3 pb-3">
+                    <div className="border-t border-white/20 pt-3">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 px-1 mb-2">
+                            Recent Projects
+                        </p>
+                        <div className="flex flex-col gap-1">
+                            {[0, 1].map(i => {
+                                const p = recentProjects[i];
+                                if (!p) {
+                                    return (
+                                        <div
+                                            key={i}
+                                            className="flex items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 border border-dashed border-white/15 opacity-40"
+                                        >
+                                            <FolderOpen className="h-4 w-4 shrink-0 text-white/50" />
+                                            <span className="text-xs text-white/40 truncate italic">No recent project</span>
+                                        </div>
+                                    );
+                                }
+                                return (
+                                    <NavLink
+                                        key={p._id}
+                                        to={`/project/${p._id}`}
+                                        className={({ isActive }) => cn(
+                                            "flex items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-xs font-medium transition-all overflow-hidden whitespace-nowrap",
+                                            isActive
+                                                ? "bg-white/20 text-white font-bold"
+                                                : "text-white/70 hover:bg-white/10 hover:text-white",
+                                            isAppProcessing && "pointer-events-none opacity-50"
+                                        )}
+                                    >
+                                        <FolderOpen className="h-4 w-4 shrink-0" />
+                                        <span className="truncate">{p.title || 'Untitled'}</span>
+                                    </NavLink>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="flex flex-col p-3 border-t border-white/20 gap-2">
                 {isAuthenticated ? (

@@ -5,6 +5,7 @@ import cors from 'cors';
 import { connectDB } from './db/connectDB.js';
 import authRoutes from './routes/authRoutes.js';
 import projectRoutes from './routes/projectRoutes.js';
+import latexRoutes from './routes/latexRoutes.js';
 
 dotenv.config();
 
@@ -13,6 +14,8 @@ const app = express();
 app.use(express.json()); // allows us to parse incoming requests:req.body
 app.use(cors());
 
+
+app.use("/api/latex-api", latexRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
 

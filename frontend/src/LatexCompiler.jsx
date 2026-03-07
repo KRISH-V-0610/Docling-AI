@@ -38,40 +38,84 @@ const LatexCompiler = () => {
     const [isCompiling, setIsCompiling] = useState(false);
     const [error, setError] = useState("");
 
-    const compileLatex = async () => {
-        setIsCompiling(true);
-        setError("");
-        try {
-            // Using latexonline.cc for compilation
-            const encodedText = encodeURIComponent(latexCode);
-            const url = `/latex-api/compile?text=${encodedText}`;
+    // const compileLatex = async () => {
+    //     setIsCompiling(true);
+    //     setError("");
+    //     try {
+    //         // Using latexonline.cc for compilation
+    //         const encodedText = encodeURIComponent(latexCode);
+    //         const url = `/latex-api/compile?text=${encodedText}`;
 
-            const response = await fetch(url);
+    //         const response = await fetch(url);
 
-            if (!response.ok) {
-                // Attempt to parse compilation error from the response
-                const errorText = await response.text();
-                throw new Error(errorText || "Compilation failed");
-            }
+    //         if (!response.ok) {
+    //             // Attempt to parse compilation error from the response
+    //             const errorText = await response.text();
+    //             throw new Error(errorText || "Compilation failed");
+    //         }
 
-            // Convert response to a blob URL to display in iframe
-            const blob = await response.blob();
-            const objectUrl = URL.createObjectURL(blob);
-            setPdfUrl(objectUrl);
+    //         // Convert response to a blob URL to display in iframe
+    //         const blob = await response.blob();
+    //         const objectUrl = URL.createObjectURL(blob);
+    //         setPdfUrl(objectUrl);
 
-        } catch (err) {
-            console.error("Compilation Error:", err);
-            // Typically the API returns logs in plain text if it fails
-            // We limit the error display to prevent massive UI overflow
-            const msg = err.message.substring(0, 1000) + (err.message.length > 1000 ? "..." : "");
-            setError(msg || "An unknown error occurred during compilation.");
-            setPdfUrl("");
-        } finally {
-            setIsCompiling(false);
-        }
-    };
+    //     } catch (err) {
+    //         console.error("Compilation Error:", err);
+    //         // Typically the API returns logs in plain text if it fails
+    //         // We limit the error display to prevent massive UI overflow
+    //         const msg = err.message.substring(0, 1000) + (err.message.length > 1000 ? "..." : "");
+    //         setError(msg || "An unknown error occurred during compilation.");
+    //         setPdfUrl("");
+    //     } finally {
+    //         setIsCompiling(false);
+    //     }
+    // };
 
     // Compile on mount
+    
+    const compileLatex = async () => {
+    setIsCompiling(true);
+    setError("");
+
+    try {
+        if (pdfUrl) {
+            URL.revokeObjectURL(pdfUrl);
+            setPdfUrl("");
+        }
+
+        const response = await fetch("http://localhost:3000/api/compile", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                latex: latexCode,
+            }),
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => null);
+            throw new Error(
+                data?.error || data?.message || "Compilation failed"
+            );
+        }
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        setPdfUrl(objectUrl);
+    } catch (err) {
+        console.error("Compilation Error:", err);
+        const msg =
+            (err.message || "An unknown error occurred during compilation.")
+                .substring(0, 1000) +
+            ((err.message || "").length > 1000 ? "..." : "");
+        setError(msg);
+        setPdfUrl("");
+    } finally {
+        setIsCompiling(false);
+    }
+};
+    
     useEffect(() => {
         compileLatex();
     }, []);

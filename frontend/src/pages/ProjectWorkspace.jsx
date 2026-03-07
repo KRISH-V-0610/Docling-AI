@@ -16,6 +16,8 @@ import MonacoEditor from '@monaco-editor/react';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/projects';
 
 export function ProjectWorkspace() {
+
+    const latexPreviewRef = useRef(null);
     const { id } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
@@ -35,7 +37,7 @@ export function ProjectWorkspace() {
     const [editingFileId, setEditingFileId] = useState(null);
     const [editingFileName, setEditingFileName] = useState('');
 
-    const { renameProject, deleteProject } = useProjectStore();
+    const { renameProject, deleteProject, recordVisit } = useProjectStore();
     const { toast, confirm } = useToast();
     const { latexContent, setLatexContent, targetStyle, setTargetStyle, customRules, setCustomRules, llmEngine, setLlmEngine, setUploadedFile, setReconstructProjectId, setReconstructSourceFileName, setDeepScanProjectId, setDeepScanSourceFileName } = useAppStore();
     const fileInputRef = useRef(null);
@@ -67,6 +69,7 @@ export function ProjectWorkspace() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setProject(res.data);
+            recordVisit(res.data);
             if (res.data.files?.length > 0 && !activeFileId) {
                 setActiveFileId(res.data.files[0]._id);
             }
@@ -290,81 +293,112 @@ export function ProjectWorkspace() {
         setLatexOutline(newOutline);
     }, [localContent, activeFile]);
 
-    const sanitizeLatex = useCallback((code) => {
-        // ── Step 1: Structural sanitization ──
-        const beginDocRegex = /\\begin\{document\}/;
-        const firstBeginIndex = code.search(beginDocRegex);
-        let preamble = ""; let restOfCode = code;
-        if (firstBeginIndex !== -1) { preamble = code.substring(0, firstBeginIndex); restOfCode = code.substring(firstBeginIndex); }
-        else { return `\\nonstopmode\n\\documentclass{article}\n\\begin{document}\n${code}\n\\end{document}`; }
-        let hasDocClass = false;
-        preamble = preamble.split('\n').filter(line => {
-            if (line.trim().startsWith('\\documentclass')) { if (hasDocClass) return false; hasDocClass = true; return true; } return true;
-        }).join('\n');
-        if (!hasDocClass) preamble = '\\documentclass{article}\n' + preamble;
-        let body = restOfCode.replace(/\\begin\{document\}/g, '').replace(/\\end\{document\}/g, '').replace(/\\documentclass(\[.*?\])?\{.*?\}/g, '');
-        const packageRegex = /\\(usepackage|usetikzlibrary)(\[.*?\])?\{.*?\}/g;
-        let packagesToHoist = "";
-        let pkgMatch;
-        while ((pkgMatch = packageRegex.exec(body)) !== null) { packagesToHoist += pkgMatch[0] + "\n"; }
-        body = body.replace(packageRegex, '');
+    // const sanitizeLatex = useCallback((code) => {
+    //     // ── Step 1: Structural sanitization ──
+    //     const beginDocRegex = /\\begin\{document\}/;
+    //     const firstBeginIndex = code.search(beginDocRegex);
+    //     let preamble = ""; let restOfCode = code;
+    //     if (firstBeginIndex !== -1) { preamble = code.substring(0, firstBeginIndex); restOfCode = code.substring(firstBeginIndex); }
+    //     else { return `\\nonstopmode\n\\documentclass{article}\n\\begin{document}\n${code}\n\\end{document}`; }
+    //     let hasDocClass = false;
+    //     preamble = preamble.split('\n').filter(line => {
+    //         if (line.trim().startsWith('\\documentclass')) { if (hasDocClass) return false; hasDocClass = true; return true; } return true;
+    //     }).join('\n');
+    //     if (!hasDocClass) preamble = '\\documentclass{article}\n' + preamble;
+    //     let body = restOfCode.replace(/\\begin\{document\}/g, '').replace(/\\end\{document\}/g, '').replace(/\\documentclass(\[.*?\])?\{.*?\}/g, '');
+    //     const packageRegex = /\\(usepackage|usetikzlibrary)(\[.*?\])?\{.*?\}/g;
+    //     let packagesToHoist = "";
+    //     let pkgMatch;
+    //     while ((pkgMatch = packageRegex.exec(body)) !== null) { packagesToHoist += pkgMatch[0] + "\n"; }
+    //     body = body.replace(packageRegex, '');
 
-        // ── Step 2: Sanitize common error-causing patterns ──
-        // Fix whitespace in includegraphics filenames
-        body = body.replace(
-            /\\includegraphics(\[.*?\])?\{([^}]*)\}/g,
-            (match, opts, filename) => {
-                const cleaned = filename.trim();
-                return cleaned !== filename ? `\\includegraphics${opts || ''}{${cleaned}}` : match;
-            }
-        );
-        // Fix unmatched braces
-        let braceDepth = 0;
-        for (const ch of body) { if (ch === '{') braceDepth++; else if (ch === '}') braceDepth--; }
-        if (braceDepth > 0) body += '}'.repeat(braceDepth);
-        // Balance \begin{env} and \end{env} pairs
-        const envBeginRegex = /\\begin\{([^}]+)\}/g;
-        const envEndRegex = /\\end\{([^}]+)\}/g;
-        const envStack = {};
-        let m;
-        while ((m = envBeginRegex.exec(body)) !== null) { envStack[m[1]] = (envStack[m[1]] || 0) + 1; }
-        while ((m = envEndRegex.exec(body)) !== null) { envStack[m[1]] = (envStack[m[1]] || 0) - 1; }
-        let envFixSuffix = '', envFixPrefix = '';
-        for (const [env, count] of Object.entries(envStack)) {
-            if (count > 0) envFixSuffix += `\\end{${env}}\n`.repeat(count);
-            else if (count < 0) envFixPrefix += `\\begin{${env}}\n`.repeat(Math.abs(count));
-        }
-        body = envFixPrefix + body + envFixSuffix;
+    //     // ── Step 2: Sanitize common error-causing patterns ──
+    //     // Fix whitespace in includegraphics filenames
+    //     body = body.replace(
+    //         /\\includegraphics(\[.*?\])?\{([^}]*)\}/g,
+    //         (match, opts, filename) => {
+    //             const cleaned = filename.trim();
+    //             return cleaned !== filename ? `\\includegraphics${opts || ''}{${cleaned}}` : match;
+    //         }
+    //     );
+    //     // Fix unmatched braces
+    //     let braceDepth = 0;
+    //     for (const ch of body) { if (ch === '{') braceDepth++; else if (ch === '}') braceDepth--; }
+    //     if (braceDepth > 0) body += '}'.repeat(braceDepth);
+    //     // Balance \begin{env} and \end{env} pairs
+    //     const envBeginRegex = /\\begin\{([^}]+)\}/g;
+    //     const envEndRegex = /\\end\{([^}]+)\}/g;
+    //     const envStack = {};
+    //     let m;
+    //     while ((m = envBeginRegex.exec(body)) !== null) { envStack[m[1]] = (envStack[m[1]] || 0) + 1; }
+    //     while ((m = envEndRegex.exec(body)) !== null) { envStack[m[1]] = (envStack[m[1]] || 0) - 1; }
+    //     let envFixSuffix = '', envFixPrefix = '';
+    //     for (const [env, count] of Object.entries(envStack)) {
+    //         if (count > 0) envFixSuffix += `\\end{${env}}\n`.repeat(count);
+    //         else if (count < 0) envFixPrefix += `\\begin{${env}}\n`.repeat(Math.abs(count));
+    //     }
+    //     body = envFixPrefix + body + envFixSuffix;
 
-        // 2d. Handle BibTeX — texlive.net doesn't run bibtex, so replace with thebibliography
-        const hasBib = /\\bibliography\{/.test(body) || /\\bibliography\{/.test(preamble);
-        const hasBibStyle = /\\bibliographystyle\{/.test(body) || /\\bibliographystyle\{/.test(preamble);
-        if (hasBib || hasBibStyle) {
-            const citeRegex = /\\cite[tp]?\{([^}]+)\}/g;
-            const citeKeys = new Set();
-            let citeMatch;
-            while ((citeMatch = citeRegex.exec(body)) !== null) {
-                citeMatch[1].split(',').forEach(k => citeKeys.add(k.trim()));
-            }
-            body = body.replace(/\\bibliographystyle\{[^}]*\}/g, '');
-            body = body.replace(/\\bibliography\{[^}]*\}/g, '');
-            preamble = preamble.replace(/\\bibliographystyle\{[^}]*\}/g, '');
-            preamble = preamble.replace(/\\bibliography\{[^}]*\}/g, '');
-            if (citeKeys.size > 0) {
-                let bibBlock = `\n\\begin{thebibliography}{${citeKeys.size}}\n`;
-                let idx = 1;
-                for (const key of citeKeys) {
-                    bibBlock += `\\bibitem{${key}} [${idx}] Reference: \\textit{${key.replace(/_/g, '\\_')}}.\n`;
-                    idx++;
-                }
-                bibBlock += `\\end{thebibliography}\n`;
-                body += bibBlock;
-            }
-        }
+    //     // 2d. Handle BibTeX — texlive.net doesn't run bibtex, so replace with thebibliography
+    //     const hasBib = /\\bibliography\{/.test(body) || /\\bibliography\{/.test(preamble);
+    //     const hasBibStyle = /\\bibliographystyle\{/.test(body) || /\\bibliographystyle\{/.test(preamble);
+    //     if (hasBib || hasBibStyle) {
+    //         const citeRegex = /\\cite[tp]?\{([^}]+)\}/g;
+    //         const citeKeys = new Set();
+    //         let citeMatch;
+    //         while ((citeMatch = citeRegex.exec(body)) !== null) {
+    //             citeMatch[1].split(',').forEach(k => citeKeys.add(k.trim()));
+    //         }
+    //         body = body.replace(/\\bibliographystyle\{[^}]*\}/g, '');
+    //         body = body.replace(/\\bibliography\{[^}]*\}/g, '');
+    //         preamble = preamble.replace(/\\bibliographystyle\{[^}]*\}/g, '');
+    //         preamble = preamble.replace(/\\bibliography\{[^}]*\}/g, '');
+    //         if (citeKeys.size > 0) {
+    //             let bibBlock = `\n\\begin{thebibliography}{${citeKeys.size}}\n`;
+    //             let idx = 1;
+    //             for (const key of citeKeys) {
+    //                 bibBlock += `\\bibitem{${key}} [${idx}] Reference: \\textit{${key.replace(/_/g, '\\_')}}.\n`;
+    //                 idx++;
+    //             }
+    //             bibBlock += `\\end{thebibliography}\n`;
+    //             body += bibBlock;
+    //         }
+    //     }
 
-        // ── Step 3: Force nonstopmode ──
-        return `\\nonstopmode\n${preamble}\n${packagesToHoist}\n\\begin{document}\n${body}\n\\end{document}`;
-    }, []);
+    //     // ── Step 3: Force nonstopmode ──
+    //     return `\\nonstopmode\n${preamble}\n${packagesToHoist}\n\\begin{document}\n${body}\n\\end{document}`;
+    // }, []);
+const sanitizeLatex = useCallback((code) => {
+    if (!code || !code.trim()) {
+        return `\\documentclass{article}
+\\begin{document}
+Empty document
+\\end{document}`;
+    }
+
+    const trimmed = code.trim();
+
+    // If it already looks like a full LaTeX document, do not wrap it
+    if (trimmed.includes("\\documentclass") && trimmed.includes("\\begin{document}")) {
+        return trimmed;
+    }
+
+    // If it has begin{document} but no documentclass, add only documentclass
+    if (trimmed.includes("\\begin{document}") && !trimmed.includes("\\documentclass")) {
+        return `\\documentclass{article}
+${trimmed}`;
+    }
+
+    // Otherwise treat it like raw content
+    return `\\documentclass{article}
+\\usepackage[utf8]{inputenc}
+\\usepackage[T1]{fontenc}
+\\usepackage{lmodern}
+\\usepackage{hyperref}
+\\begin{document}
+${trimmed}
+\\end{document}`;
+}, []);
 
     const handleLatexCompile = useCallback(() => {
         if (!latexFormRef.current) return;
@@ -415,30 +449,81 @@ export function ProjectWorkspace() {
         navigate('/process');
     };
 
-    const handleDeepScanStart = () => {
-        if (!activeFile) {
-            toast({ title: 'No file selected', description: 'Please select a file to deep scan.', variant: 'error' });
-            return;
+    // ---------------------------------
+
+
+const compileLatex = useCallback(async () => {
+    setLatexCompiling(true);
+    setLatexCompiled(false);
+
+    try {
+        const response = await fetch("http://localhost:3000/api/latex-api/compile", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                latex: sanitizeLatex(localContent),
+            }),
+        });
+
+        const iframe = document.querySelector('iframe[name="latex-pdf-preview-ws"]');
+
+        if (!response.ok) {
+            let errorMessage = "Compilation failed";
+            try {
+                const data = await response.json();
+                errorMessage = data?.error || data?.message || errorMessage;
+            } catch {
+                errorMessage = await response.text();
+            }
+
+            if (iframe) {
+                iframe.srcdoc = `
+                    <div style="font-family: Arial, sans-serif; padding: 20px; background: #fff7f7; color: #7f1d1d; height: 100%; box-sizing: border-box;">
+                        <h2 style="margin-top:0;">Compilation Error</h2>
+                        <pre style="white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.5;">${String(errorMessage)
+                            .replace(/&/g, "&amp;")
+                            .replace(/</g, "&lt;")
+                            .replace(/>/g, "&gt;")}</pre>
+                    </div>
+                `;
+            }
+
+            throw new Error(errorMessage);
         }
 
-        const content = activeFile.content || '';
-        const plainText = content.replace(/<[^>]*>/g, '\n').replace(/&nbsp;/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+        const blob = await response.blob();
+        const pdfUrl = URL.createObjectURL(blob);
 
-        const blob = new Blob([plainText], { type: 'text/plain' });
-        const origName = activeFile.originalName || 'document.txt';
-        const baseName = origName.replace(/\.[^.]+$/, '');
+        if (iframe) {
+            iframe.src = pdfUrl;
+        }
 
-        // Deep Scan accepts .docx, .pdf, and .txt. Since we only have reconstructed plain text here in activeFile,
-        // we must send it as .txt so python-docx doesn't crash trying to parse a plain-text file as a zip-based docx.
-        const fileName = `${baseName}.txt`;
-        const deepScanFile = new File([blob], fileName, { type: 'text/plain' });
+        setLatexCompiled(true);
 
-        setUploadedFile(deepScanFile);
-        setDeepScanProjectId(id);
-        setDeepScanSourceFileName(origName.replace(/\.[^.]+$/, ''));
-        navigate('/deep-scan');
-    };
+        toast({
+            title: "Compilation successful",
+            description: "PDF preview updated.",
+            variant: "success",
+        });
+    } catch (err) {
+        console.error("LaTeX Compilation Error:", err);
 
+        toast({
+            title: "Compilation failed",
+            description: String(err.message || "Could not compile LaTeX").slice(0, 200),
+            variant: "error",
+        });
+    } finally {
+        setLatexCompiling(false);
+    }
+}, [localContent, sanitizeLatex, toast]);
+
+
+
+
+    // -----------------------------------------
     if (loading) {
         return <div className="flex h-full items-center justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary-500)]" /></div>;
     }
@@ -572,7 +657,8 @@ export function ProjectWorkspace() {
                                 {activeFile.originalName.endsWith('.tex') && (
                                     <Button
                                         variant="primary"
-                                        onClick={handleLatexCompile}
+                                        // onClick={handleLatexCompile}
+                                        onClick={compileLatex}
                                         disabled={latexCompiling}
                                         className="h-8 px-4 text-xs font-semibold"
                                     >
@@ -591,14 +677,14 @@ export function ProjectWorkspace() {
                                     <Wand2 className="w-3.5 h-3.5" />
                                     Reconstruct
                                 </button>
-                                <button
+                                {/* <button
                                     onClick={handleDeepScanStart}
                                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-lg shadow-sm transition-all"
                                     title="Deep Scan: regex formatting + LLM LaTeX generation"
                                 >
                                     <Microscope className="w-3.5 h-3.5" />
                                     Deep Scan
-                                </button>
+                                </button> */}
                             </div>
                             <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-text-muted)]">
                                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4 text-green-600" /> Saved</>}
@@ -682,7 +768,7 @@ export function ProjectWorkspace() {
                                                 <span className="font-semibold text-[var(--color-text-main)]">PDF Preview</span>
                                             </div>
                                             <div className="flex-1 bg-[#525659] relative">
-                                                <iframe name="latex-pdf-preview-ws" className={`w-full h-full border-none transition-opacity duration-300 ${latexCompiling ? 'opacity-50' : 'opacity-100'}`} title="Compiled PDF" />
+                                                <iframe ref={latexPreviewRef} name="latex-pdf-preview-ws" className={`w-full h-full border-none transition-opacity duration-300 ${latexCompiling ? 'opacity-50' : 'opacity-100'}`} title="Compiled PDF" />
                                                 {!latexCompiled && !latexCompiling && (
                                                     <div className="absolute inset-0 flex flex-col items-center justify-center text-white/70">
                                                         <FileDown className="h-12 w-12 mb-3 opacity-50" />
@@ -829,7 +915,7 @@ export function ProjectWorkspace() {
                                         onChange={(e) => setCustomRules(e.target.value)}
                                     />
                                 </div>
-{/* 
+                                {/* 
                                 <div>
                                     <label className="block text-xs font-semibold text-[var(--color-text-main)] mb-2">LLM Engine</label>
                                     <select

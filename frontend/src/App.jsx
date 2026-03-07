@@ -17,6 +17,8 @@ import { ValidationArea } from './pages/ValidationArea';
 import { ValidationReport } from './components/ValidationReport';
 import { AdvanceWorkspace } from './pages/AdvanceWorkspace';
 import { DeepScan } from './pages/DeepScan';
+import { Integrations } from './pages/Integrations';
+import { Workflows } from './pages/Workflows';
 import useAuthStore from './store/useAuthStore';
 
 function PlaceholderPage({ title }) {
@@ -101,6 +103,8 @@ function App() {
             <Route path="/process" element={<Process />} />
             <Route path="/deep-scan" element={<DeepScan />} />
             <Route path="/advance-workshop" element={<AdvanceWorkspace />} />
+            <Route path="/integrations" element={<Integrations />} />
+            <Route path="/workflows" element={<Workflows />} />
             <Route path="/validation/:projectId/:originalId/:reconstructedId" element={<ValidationArea />} />
           </Route>
         </Route>
