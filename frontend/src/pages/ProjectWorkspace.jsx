@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { FileText, UploadCloud, FileType2, Loader2, Save, Plus, ChevronLeft, Trash2, Edit2, Check, X, Code2, Wand2, Settings, Play, FileDown, ListOrdered, ChevronDown, ChevronRight, ImagePlus } from 'lucide-react';
+import { FileText, UploadCloud, FileType2, Loader2, Save, Plus, ChevronLeft, Trash2, Edit2, Check, X, Code2, Wand2, Microscope, Settings, Play, FileDown, ListOrdered, ChevronDown, ChevronRight, ImagePlus } from 'lucide-react';
 import { Button, cn } from '../components/Button';
 import { useToast } from '../components/Toasts';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -37,12 +37,11 @@ export function ProjectWorkspace() {
 
     const { renameProject, deleteProject } = useProjectStore();
     const { toast, confirm } = useToast();
-    const { latexContent, setLatexContent, targetStyle, setTargetStyle, customRules, setCustomRules, llmEngine, setLlmEngine, setUploadedFile, setReconstructProjectId, setReconstructSourceFileName } = useAppStore();
+    const { latexContent, setLatexContent, targetStyle, setTargetStyle, customRules, setCustomRules, llmEngine, setLlmEngine, setUploadedFile, setReconstructProjectId, setReconstructSourceFileName, setDeepScanProjectId, setDeepScanSourceFileName } = useAppStore();
     const fileInputRef = useRef(null);
     const saveTimeoutRef = useRef(null);
 
-    // Panel state
-    const [showLatexPanel, setShowLatexPanel] = useState(false);
+    // Reconstruct modal state
     const [showReconstructModal, setShowReconstructModal] = useState(false);
 
     // LaTeX editor state
@@ -83,6 +82,8 @@ export function ProjectWorkspace() {
         return () => clearTimeout(saveTimeoutRef.current);
     }, [id]);
 
+    const activeFile = project?.files?.find(f => f._id === activeFileId);
+
     // Ref to track which file ID is currently loaded in the editor to prevent active-typing loops
     const [loadedFileId, setLoadedFileId] = useState(null);
 
@@ -95,8 +96,8 @@ export function ProjectWorkspace() {
                     let text = file.content || '';
 
                     // If it's not Markdown and doesn't explicitly look like HTML, normalize to HTML paragraphs for Quill
-                    const isMarkdown = file.originalName.toLowerCase().endsWith('.md');
-                    if (!isMarkdown && text && !text.includes('<p>') && !text.includes('<h')) {
+                    const isMarkdownOrTex = file.originalName.toLowerCase().endsWith('.md') || file.originalName.toLowerCase().endsWith('.tex');
+                    if (!isMarkdownOrTex && text && !text.includes('<p>') && !text.includes('<h')) {
                         text = text.split('\n')
                             .map(line => line.trim())
                             .filter(line => line.length > 0)
@@ -147,8 +148,8 @@ export function ProjectWorkspace() {
 
         // Strict mime type check
         const ext = file.name.split('.').pop().toLowerCase();
-        if (!['txt', 'md', 'doc', 'docx'].includes(ext)) {
-            toast({ title: 'Invalid format', description: 'Please upload only .txt, .md, or Word docs', variant: 'error' });
+        if (!['txt', 'md', 'doc', 'docx', 'tex'].includes(ext)) {
+            toast({ title: 'Invalid format', description: 'Please upload only .txt, .md, .tex, or Word docs', variant: 'error' });
             return;
         }
 
@@ -275,8 +276,8 @@ export function ProjectWorkspace() {
 
     // ---- LaTeX Helpers ----
     useEffect(() => {
-        if (!latexContent) { setLatexOutline([]); return; }
-        const lines = latexContent.split('\n');
+        if (!localContent || (!activeFile?.originalName.endsWith('.tex'))) { setLatexOutline([]); return; }
+        const lines = localContent.split('\n');
         const newOutline = [];
         const sectionRegex = /^\\(sub)*section\*?\{([^}]+)\}/;
         lines.forEach((line, index) => {
@@ -287,7 +288,7 @@ export function ProjectWorkspace() {
             }
         });
         setLatexOutline(newOutline);
-    }, [latexContent]);
+    }, [localContent, activeFile]);
 
     const sanitizeLatex = useCallback((code) => {
         // ── Step 1: Structural sanitization ──
@@ -371,7 +372,7 @@ export function ProjectWorkspace() {
         const form = latexFormRef.current;
         form.querySelectorAll('.dynamic-asset').forEach(el => el.remove());
         const hiddenInput = form.querySelector('input[name="filecontents[]"]');
-        if (hiddenInput) hiddenInput.value = sanitizeLatex(latexContent);
+        if (hiddenInput) hiddenInput.value = sanitizeLatex(localContent);
         latexAssets.forEach((file) => {
             const nameInput = document.createElement('input'); nameInput.type = 'hidden'; nameInput.name = 'filename[]'; nameInput.value = file.name; nameInput.className = 'dynamic-asset'; form.appendChild(nameInput);
             const fileInput = document.createElement('input'); fileInput.type = 'file'; fileInput.name = 'filecontents[]'; fileInput.className = 'dynamic-asset';
@@ -379,7 +380,7 @@ export function ProjectWorkspace() {
         });
         form.submit();
         setTimeout(() => { setLatexCompiling(false); setLatexCompiled(true); }, 1500);
-    }, [latexContent, latexAssets, sanitizeLatex]);
+    }, [localContent, latexAssets, sanitizeLatex]);
 
     const handleLatexAssetUpload = (e) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -414,14 +415,35 @@ export function ProjectWorkspace() {
         navigate('/process');
     };
 
+    const handleDeepScanStart = () => {
+        if (!activeFile) {
+            toast({ title: 'No file selected', description: 'Please select a file to deep scan.', variant: 'error' });
+            return;
+        }
+
+        const content = activeFile.content || '';
+        const plainText = content.replace(/<[^>]*>/g, '\n').replace(/&nbsp;/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+
+        const blob = new Blob([plainText], { type: 'text/plain' });
+        const origName = activeFile.originalName || 'document.txt';
+        const baseName = origName.replace(/\.[^.]+$/, '');
+
+        // Deep Scan accepts .docx, .pdf, and .txt. Since we only have reconstructed plain text here in activeFile,
+        // we must send it as .txt so python-docx doesn't crash trying to parse a plain-text file as a zip-based docx.
+        const fileName = `${baseName}.txt`;
+        const deepScanFile = new File([blob], fileName, { type: 'text/plain' });
+
+        setUploadedFile(deepScanFile);
+        setDeepScanProjectId(id);
+        setDeepScanSourceFileName(origName.replace(/\.[^.]+$/, ''));
+        navigate('/deep-scan');
+    };
 
     if (loading) {
         return <div className="flex h-full items-center justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary-500)]" /></div>;
     }
 
     if (!project) return <div>Workspace not found.</div>;
-
-    const activeFile = project.files?.find(f => f._id === activeFileId);
 
     return (
         <div className="flex h-full w-full bg-white rounded-[var(--radius-xl)] shadow-[var(--shadow-card)] overflow-hidden border border-[var(--color-surface-200)]">
@@ -485,7 +507,7 @@ export function ProjectWorkspace() {
                             }}
                         >
                             <div className="flex items-center gap-2 overflow-hidden flex-1">
-                                {file.originalName.endsWith('.md') ? <FileType2 className="w-4 h-4 shrink-0 text-blue-500" /> : <FileText className="w-4 h-4 shrink-0 opacity-70" />}
+                                {file.originalName.endsWith('.md') ? <FileType2 className="w-4 h-4 shrink-0 text-blue-500" /> : file.originalName.endsWith('.tex') ? <Code2 className="w-4 h-4 shrink-0 text-[var(--color-primary-500)]" /> : <FileText className="w-4 h-4 shrink-0 opacity-70" />}
 
                                 {editingFileId === file._id ? (
                                     <input
@@ -534,177 +556,33 @@ export function ProjectWorkspace() {
                     >
                         {uploading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : <><Plus className="w-3 h-3 mr-1" />Add File</>}
                     </Button>
-                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".txt,.md,.doc,.docx" />
-
-                    {/* LaTeX Editor button */}
-                    <button
-                        onClick={() => { setShowLatexPanel(v => !v); }}
-                        className={cn(
-                            "mt-1 flex items-center gap-2 w-full px-2 py-2 rounded-lg text-xs font-semibold transition-colors",
-                            showLatexPanel
-                                ? "bg-[var(--color-primary-100)] text-[var(--color-primary-900)]"
-                                : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-100)] hover:text-[var(--color-text-main)]"
-                        )}
-                    >
-                        <Code2 className="w-4 h-4 shrink-0" />
-                        LaTeX Editor
-                    </button>
+                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".txt,.md,.doc,.docx,.tex" />
                 </div>
             </div>
 
             {/* Main Area */}
             <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
 
-                {/* LaTeX Panel (replaces editor when active) */}
-                {showLatexPanel && (
-                    <div className="flex flex-col h-full">
-                        {/* LaTeX Toolbar */}
-                        <div className="flex items-center justify-between gap-4 py-2 px-4 bg-[#1e1e2e] border-b border-[#333] shrink-0">
-                            <div className="flex items-center gap-2">
-                                <Code2 className="h-5 w-5 text-[var(--color-primary-400)]" />
-                                <span className="text-sm font-bold text-white">LaTeX Editor</span>
-                                {latexCompiled && !latexCompiling && (
-                                    <span className="text-xs font-medium text-green-400 flex items-center gap-1 ml-3 px-2 py-0.5 bg-green-900/30 rounded-full border border-green-700">
-                                        <Check className="h-3 w-3" /> Ready
-                                    </span>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    variant="primary"
-                                    onClick={handleLatexCompile}
-                                    disabled={latexCompiling}
-                                    className="h-8 px-4 text-xs font-semibold"
-                                >
-                                    {latexCompiling ? (
-                                        <><span className="mr-1.5 h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />Compiling...</>
-                                    ) : (
-                                        <><Play className="h-3.5 w-3.5 mr-1.5 fill-current" />Compile PDF</>
-                                    )}
-                                </Button>
-                                <button onClick={() => setShowLatexPanel(false)} className="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded transition-colors" title="Close LaTeX Editor">
-                                    <X className="h-4 w-4" />
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* LaTeX Split Workspace */}
-                        <div className="flex flex-1 min-h-0">
-                            {/* Outline Sidebar */}
-                            <div className="hidden md:flex flex-col w-52 bg-[#1e1e1e] border-r border-[#333] shrink-0 text-[#ccc] overflow-hidden">
-                                <div className="flex items-center px-3 py-2 border-b border-[#333] shrink-0">
-                                    <ListOrdered className="h-3.5 w-3.5 mr-2" />
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider">Outline</span>
-                                </div>
-                                <div className="flex-1 overflow-y-auto py-1">
-                                    {latexOutline.length === 0 ? (
-                                        <div className="px-3 py-3 text-[10px] text-[#888] italic text-center">No sections. Use \section{'{...}'} to build an outline.</div>
-                                    ) : latexOutline.map((item) => {
-                                        const pl = item.level === 1 ? 'pl-3' : item.level === 2 ? 'pl-6' : 'pl-9';
-                                        const sz = item.level === 1 ? 'text-[12px] font-medium text-white' : 'text-[11px] text-[#ccc]';
-                                        return (
-                                            <div key={item.id} className={`flex items-center py-1 cursor-pointer hover:bg-[#2a2d2e] ${pl}`}
-                                                onClick={() => { if (latexEditorRef.current) { latexEditorRef.current.revealLineInCenter(item.line); latexEditorRef.current.setPosition({ lineNumber: item.line, column: 1 }); latexEditorRef.current.focus(); } }}
-                                            >
-                                                <span className={`${sz} truncate pr-2`} title={item.title}>{item.title}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            {/* Monaco Editor */}
-                            <div className="flex flex-col flex-1 overflow-hidden">
-                                <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-200)] bg-[var(--color-surface-50)] shrink-0 text-xs">
-                                    <span className="font-semibold text-[var(--color-text-main)]">main.tex</span>
-                                    <div>
-                                        <input type="file" accept="image/*, .sty, .bib, .cls" multiple onChange={handleLatexAssetUpload} className="hidden" id="latex-asset-upload-ws" />
-                                        <label htmlFor="latex-asset-upload-ws" className="cursor-pointer flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[var(--color-primary-600)] bg-[var(--color-primary-50)] hover:bg-[var(--color-primary-100)] rounded transition-colors">
-                                            <ImagePlus className="h-3.5 w-3.5" /> Upload Assets
-                                        </label>
-                                    </div>
-                                </div>
-                                {latexAssets.length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5 px-3 py-1.5 bg-[var(--color-surface-100)] border-b border-[var(--color-surface-200)] shrink-0">
-                                        {latexAssets.map((file, idx) => (
-                                            <div key={idx} className="flex items-center gap-1 px-2 py-0.5 bg-white border border-[var(--color-surface-300)] rounded-md text-[11px]">
-                                                <span className="max-w-[100px] truncate">{file.name}</span>
-                                                <button onClick={() => setLatexAssets(prev => prev.filter((_, i) => i !== idx))} className="hover:text-red-500 transition-colors"><X className="h-3 w-3" /></button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                                <div className="flex-1">
-                                    <MonacoEditor
-                                        height="100%"
-                                        defaultLanguage="latex"
-                                        value={latexContent}
-                                        onChange={(v) => setLatexContent(v)}
-                                        theme="vs-light"
-                                        onMount={(editor) => { latexEditorRef.current = editor; }}
-                                        options={{ minimap: { enabled: false }, fontSize: 14, wordWrap: 'on', lineNumbers: 'on', padding: { top: 12 }, scrollBeyondLastLine: false, smoothScrolling: true }}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* PDF Preview */}
-                            <div className="flex flex-col flex-1 overflow-hidden border-l border-[var(--color-surface-300)]">
-                                <div className="flex items-center px-3 py-1.5 border-b border-[var(--color-surface-200)] bg-[var(--color-surface-50)] shrink-0 text-xs">
-                                    <FileDown className="h-3.5 w-3.5 mr-2 text-[var(--color-text-muted)]" />
-                                    <span className="font-semibold text-[var(--color-text-main)]">PDF Preview</span>
-                                </div>
-                                <div className="flex-1 bg-[#525659] relative">
-                                    <iframe name="latex-pdf-preview-ws" className={`w-full h-full border-none transition-opacity duration-300 ${latexCompiling ? 'opacity-50' : 'opacity-100'}`} title="Compiled PDF" />
-                                    {!latexCompiled && !latexCompiling && (
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-white/70">
-                                            <FileDown className="h-12 w-12 mb-3 opacity-50" />
-                                            <p className="text-base font-medium">No PDF Generated</p>
-                                            <p className="text-xs mt-1">Write LaTeX and click Compile PDF</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Hidden compile form */}
-                        <form action="https://texlive.net/cgi-bin/latexcgi" method="POST" encType="multipart/form-data" target="latex-pdf-preview-ws" className="hidden" ref={latexFormRef}>
-                            <input type="hidden" name="filecontents[]" value={latexContent} />
-                            <input type="hidden" name="filename[]" value="document.tex" />
-                            <input type="hidden" name="engine" value="pdflatex" />
-                            <input type="hidden" name="return" value="pdf" />
-                        </form>
-                    </div>
-                )}
-
-                {/* Step 1: Empty State (No Files) */}
-                {project.files?.length === 0 && (
-                    <div className="absolute inset-0 z-10 bg-white flex flex-col items-center justify-center p-8">
-                        <motion.div
-                            initial={{ scale: 0.95, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            className="w-full max-w-2xl border-2 border-dashed border-[var(--color-primary-200)] rounded-[var(--radius-xl)] p-16 text-center bg-[var(--color-primary-50)]/30 hover:bg-[var(--color-primary-50)]/60 transition-colors cursor-pointer"
-                            onClick={() => fileInputRef.current?.click()}
-                        >
-                            <div className="w-20 h-20 bg-[var(--color-primary-100)] rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-                                <UploadCloud className="w-10 h-10 text-[var(--color-primary-600)]" />
-                            </div>
-                            <h3 className="text-2xl font-bold text-[var(--color-text-main)] mb-2">Upload Initial Document</h3>
-                            <p className="text-[var(--color-text-muted)] font-medium mb-6">
-                                We support `.txt`, `.md`, `.doc`, and `.docx` unstructured manuscript files.
-                            </p>
-                            <Button disabled={uploading} className="shadow-lg bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-900)] text-white">
-                                {uploading ? "Parsing Document..." : "Select File"}
-                            </Button>
-                        </motion.div>
-                    </div>
-                )}
-
                 {/* Step 2: Editor State */}
-                {activeFile && !showLatexPanel && (
+                {activeFile && (
                     <div className="h-full flex flex-col overflow-hidden">
                         <div className="px-6 py-4 border-b border-[var(--color-surface-200)] flex justify-between items-center bg-white z-10">
                             <div className="flex items-center gap-3">
                                 <h3 className="text-xl font-bold font-karla text-[var(--color-text-main)]">{activeFile.originalName}</h3>
+                                {activeFile.originalName.endsWith('.tex') && (
+                                    <Button
+                                        variant="primary"
+                                        onClick={handleLatexCompile}
+                                        disabled={latexCompiling}
+                                        className="h-8 px-4 text-xs font-semibold"
+                                    >
+                                        {latexCompiling ? (
+                                            <><span className="mr-1.5 h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />Compiling...</>
+                                        ) : (
+                                            <><Play className="h-3.5 w-3.5 mr-1.5 fill-current" />Compile PDF</>
+                                        )}
+                                    </Button>
+                                )}
                                 <button
                                     onClick={() => setShowReconstructModal(true)}
                                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-900)] rounded-lg shadow-sm transition-colors"
@@ -712,6 +590,14 @@ export function ProjectWorkspace() {
                                 >
                                     <Wand2 className="w-3.5 h-3.5" />
                                     Reconstruct
+                                </button>
+                                <button
+                                    onClick={handleDeepScanStart}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-lg shadow-sm transition-all"
+                                    title="Deep Scan: regex formatting + LLM LaTeX generation"
+                                >
+                                    <Microscope className="w-3.5 h-3.5" />
+                                    Deep Scan
                                 </button>
                             </div>
                             <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-text-muted)]">
@@ -726,6 +612,95 @@ export function ProjectWorkspace() {
                                         <Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary-500)]" />
                                         <p className="text-sm font-medium text-[var(--color-text-muted)] animate-pulse">Hydrating editor...</p>
                                     </div>
+                                </div>
+                            ) : activeFile.originalName.endsWith('.tex') ? (
+                                <div className="flex flex-col h-full">
+
+                                    {/* LaTeX Split Workspace */}
+                                    <div className="flex flex-1 min-h-0">
+                                        {/* Outline Sidebar */}
+                                        <div className="hidden md:flex flex-col w-52 bg-[#1e1e1e] border-r border-[#333] shrink-0 text-[#ccc] overflow-hidden">
+                                            <div className="flex items-center px-3 py-2 border-b border-[#333] shrink-0">
+                                                <ListOrdered className="h-3.5 w-3.5 mr-2" />
+                                                <span className="text-[10px] font-semibold uppercase tracking-wider">Outline</span>
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto py-1">
+                                                {latexOutline.length === 0 ? (
+                                                    <div className="px-3 py-3 text-[10px] text-[#888] italic text-center">No sections. Use \section{'{...}'} to build an outline.</div>
+                                                ) : latexOutline.map((item) => {
+                                                    const pl = item.level === 1 ? 'pl-3' : item.level === 2 ? 'pl-6' : 'pl-9';
+                                                    const sz = item.level === 1 ? 'text-[12px] font-medium text-white' : 'text-[11px] text-[#ccc]';
+                                                    return (
+                                                        <div key={item.id} className={`flex items-center py-1 cursor-pointer hover:bg-[#2a2d2e] ${pl}`}
+                                                            onClick={() => { if (latexEditorRef.current) { latexEditorRef.current.revealLineInCenter(item.line); latexEditorRef.current.setPosition({ lineNumber: item.line, column: 1 }); latexEditorRef.current.focus(); } }}
+                                                        >
+                                                            <span className={`${sz} truncate pr-2`} title={item.title}>{item.title}</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* Monaco Editor */}
+                                        <div className="flex flex-col flex-1 overflow-hidden">
+                                            <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-200)] bg-[var(--color-surface-50)] shrink-0 text-xs">
+                                                <span className="font-semibold text-[var(--color-text-main)]">{activeFile.originalName}</span>
+                                                <div>
+                                                    <input type="file" accept="image/*, .sty, .bib, .cls" multiple onChange={handleLatexAssetUpload} className="hidden" id="latex-asset-upload-ws" />
+                                                    <label htmlFor="latex-asset-upload-ws" className="cursor-pointer flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[var(--color-primary-600)] bg-[var(--color-primary-50)] hover:bg-[var(--color-primary-100)] rounded transition-colors">
+                                                        <ImagePlus className="h-3.5 w-3.5" /> Upload Assets
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            {latexAssets.length > 0 && (
+                                                <div className="flex flex-wrap gap-1.5 px-3 py-1.5 bg-[var(--color-surface-100)] border-b border-[var(--color-surface-200)] shrink-0">
+                                                    {latexAssets.map((file, idx) => (
+                                                        <div key={idx} className="flex items-center gap-1 px-2 py-0.5 bg-white border border-[var(--color-surface-300)] rounded-md text-[11px]">
+                                                            <span className="max-w-[100px] truncate">{file.name}</span>
+                                                            <button onClick={() => setLatexAssets(prev => prev.filter((_, i) => i !== idx))} className="hover:text-red-500 transition-colors"><X className="h-3 w-3" /></button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <div className="flex-1">
+                                                <MonacoEditor
+                                                    height="100%"
+                                                    defaultLanguage="latex"
+                                                    value={localContent}
+                                                    onChange={handleEditorChange}
+                                                    theme="vs-light"
+                                                    onMount={(editor) => { latexEditorRef.current = editor; }}
+                                                    options={{ minimap: { enabled: false }, fontSize: 14, wordWrap: 'on', lineNumbers: 'on', padding: { top: 12 }, scrollBeyondLastLine: false, smoothScrolling: true }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* PDF Preview */}
+                                        <div className="flex flex-col flex-1 overflow-hidden border-l border-[var(--color-surface-300)]">
+                                            <div className="flex items-center px-3 py-1.5 border-b border-[var(--color-surface-200)] bg-[var(--color-surface-50)] shrink-0 text-xs">
+                                                <FileDown className="h-3.5 w-3.5 mr-2 text-[var(--color-text-muted)]" />
+                                                <span className="font-semibold text-[var(--color-text-main)]">PDF Preview</span>
+                                            </div>
+                                            <div className="flex-1 bg-[#525659] relative">
+                                                <iframe name="latex-pdf-preview-ws" className={`w-full h-full border-none transition-opacity duration-300 ${latexCompiling ? 'opacity-50' : 'opacity-100'}`} title="Compiled PDF" />
+                                                {!latexCompiled && !latexCompiling && (
+                                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-white/70">
+                                                        <FileDown className="h-12 w-12 mb-3 opacity-50" />
+                                                        <p className="text-base font-medium">No PDF Generated</p>
+                                                        <p className="text-xs mt-1">Write LaTeX and click Compile PDF</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Hidden compile form */}
+                                    <form action="https://texlive.net/cgi-bin/latexcgi" method="POST" encType="multipart/form-data" target="latex-pdf-preview-ws" className="hidden" ref={latexFormRef}>
+                                        <input type="hidden" name="filecontents[]" value={localContent} />
+                                        <input type="hidden" name="filename[]" value={activeFile.originalName} />
+                                        <input type="hidden" name="engine" value="pdflatex" />
+                                        <input type="hidden" name="return" value="pdf" />
+                                    </form>
                                 </div>
                             ) : activeFile.originalName.endsWith('.md') ? (
                                 // Markdown Split Editor
@@ -771,6 +746,29 @@ export function ProjectWorkspace() {
                                 </div>
                             )}
                         </div>
+                    </div>
+                )}
+
+                {/* Step 1: Empty State (No Files) */}
+                {project.files?.length === 0 && (
+                    <div className="absolute inset-0 z-10 bg-white flex flex-col items-center justify-center p-8">
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="w-full max-w-2xl border-2 border-dashed border-[var(--color-primary-200)] rounded-[var(--radius-xl)] p-16 text-center bg-[var(--color-primary-50)]/30 hover:bg-[var(--color-primary-50)]/60 transition-colors cursor-pointer"
+                            onClick={() => fileInputRef.current?.click()}
+                        >
+                            <div className="w-20 h-20 bg-[var(--color-primary-100)] rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                                <UploadCloud className="w-10 h-10 text-[var(--color-primary-600)]" />
+                            </div>
+                            <h3 className="text-2xl font-bold text-[var(--color-text-main)] mb-2">Upload Initial Document</h3>
+                            <p className="text-[var(--color-text-muted)] font-medium mb-6">
+                                We support `.txt`, `.md`, `.doc`, `.docx`, and `.tex` unstructured manuscript files.
+                            </p>
+                            <Button disabled={uploading} className="shadow-lg bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-900)] text-white">
+                                {uploading ? "Parsing Document..." : "Select File"}
+                            </Button>
+                        </motion.div>
                     </div>
                 )}
             </div>
@@ -831,7 +829,7 @@ export function ProjectWorkspace() {
                                         onChange={(e) => setCustomRules(e.target.value)}
                                     />
                                 </div>
-
+{/* 
                                 <div>
                                     <label className="block text-xs font-semibold text-[var(--color-text-main)] mb-2">LLM Engine</label>
                                     <select
@@ -842,7 +840,7 @@ export function ProjectWorkspace() {
                                         <option value="meta-llama/llama-4-maverick-17b-128e-instruct">LLaMA-4-Maverick 17b</option>
                                         <option value="qwen/qwen3-32b">Qwen-3 32b</option>
                                     </select>
-                                </div>
+                                </div> */}
                             </div>
 
                             {/* Processing Options */}

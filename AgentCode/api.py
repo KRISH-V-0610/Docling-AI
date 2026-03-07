@@ -52,7 +52,7 @@ if _ENV_FILE.exists():
 
 # ── Paths ────────────────────────────────────────────────────────────────
 # Use a directory outside the 'Assistant' folder to avoid uvicorn reload loops
-DOCUMENTS_DIR = Path(r"D:\CODEDB\Hackathon\HackaMineD\HackaMineD\AgentCode\documents_store").resolve()
+DOCUMENTS_DIR = Path(r"documents_store").resolve()
 DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
 os.environ["DOCUMENTS_DIR"] = str(DOCUMENTS_DIR)
 
@@ -891,7 +891,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

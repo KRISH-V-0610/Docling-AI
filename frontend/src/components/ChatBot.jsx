@@ -61,6 +61,7 @@ const ChatBot = () => {
             if (!res.ok) throw new Error("Failed to fetch from chatbot API");
 
             const data = await res.json();
+            console.log("Chat API Response:", data);
             setMessages((prev) => [
                 ...prev,
                 { text: data.response, sender: 'bot' }
@@ -167,14 +168,14 @@ const ChatBot = () => {
                     </form>
 
                     {/* Workshop Navigation */}
-                    <div className="px-3 pb-3">
+                    {/* <div className="px-3 pb-3">
                         <button
                             className="w-full p-2 bg-[#3a4d2c] text-[#fffcf0] border-none rounded-[10px] text-xs font-semibold cursor-pointer hover:bg-[#4a5d3c] transition-colors"
                             onClick={() => window.open('/workshop', '_blank')}
                         >
                             🚀 Open Advanced Workshop
                         </button>
-                    </div>
+                    </div> */}
                 </div>
 
                 {/* Character Trigger */}

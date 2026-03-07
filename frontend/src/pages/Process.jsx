@@ -99,6 +99,7 @@ export function Process() {
 
                         try {
                             const payload = JSON.parse(chunk.substring(6));
+                            console.log("Process API Payload:", payload);
 
                             if (payload.log && isMounted) {
                                 addProcessLog({ time: new Date().toLocaleTimeString(), message: payload.log });
@@ -125,7 +126,7 @@ export function Process() {
                                     setProcessingProgress(95);
 
                                     const baseName = reconstructSourceFileName || 'document';
-                                    const mdFileName = `${baseName}_reconstructed.md`;
+                                    const mdFileName = `${baseName}_${targetStyle}_reconstructed.md`;
                                     const mdBlob = new Blob([payload.markdown], { type: 'text/markdown' });
                                     const mdFile = new File([mdBlob], mdFileName, { type: 'text/markdown' });
 
@@ -142,6 +143,21 @@ export function Process() {
                                     if (uploadRes.ok) {
                                         const newFileData = await uploadRes.json();
                                         setReconstructedFileId(newFileData._id);
+
+                                        // Also upload the generated LaTeX (.tex) file
+                                        setStatusMessage('Saving reconstructed LaTeX file...');
+                                        const texFileName = `${baseName}_${targetStyle}_latex.tex`;
+                                        const texBlob = new Blob([payload.latex], { type: 'text/plain' });
+                                        const texFile = new File([texBlob], texFileName, { type: 'text/plain' });
+
+                                        const texUploadForm = new FormData();
+                                        texUploadForm.append('file', texFile, texFileName);
+
+                                        await fetch(`${API_URL}/${reconstructProjectId}/files`, {
+                                            method: 'POST',
+                                            headers: { Authorization: `Bearer ${token}` },
+                                            body: texUploadForm,
+                                        });
 
                                         // Attempt to get the original file ID for comparison
                                         try {

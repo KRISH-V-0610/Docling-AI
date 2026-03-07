@@ -15,17 +15,22 @@ import {
     FolderOpen,
     LogOut,
     Bot,
-    PlusCircle
+    PlusCircle,
+    Microscope
 } from 'lucide-react';
 import { cn } from './Button';
 import useAuthStore from '../store/useAuthStore';
 import useProjectStore from '../store/useProjectStore';
 import useAppStore from '../store/useAppStore';
+import useDeepScanStore from '../store/useDeepScanStore';
 
 export function Sidebar({ isOpen, toggleSidebar }) {
     const { isAuthenticated, user, logout } = useAuthStore();
     const { projects, fetchAllProjects } = useProjectStore();
     const { isProcessing } = useAppStore();
+    const dsStep = useDeepScanStore(s => s.currentStep);
+    const dsDone = useDeepScanStore(s => s.isProcessingDone);
+    const isAppProcessing = isProcessing || (dsStep === 3 && !dsDone);
 
     const [expandedMenus, setExpandedMenus] = React.useState({ 'Advance Workshop': true });
 
@@ -52,10 +57,10 @@ export function Sidebar({ isOpen, toggleSidebar }) {
             icon: Code2,
             children: [
                 { name: 'DocBot', path: '/advance-workshop', icon: Bot },
-                { name: 'Other Features', path: '/advance-workshop/other', icon: PlusCircle },
+                { name: 'Deep Scan', path: '/deep-scan', icon: Microscope },
             ]
         },
-        
+
     ];
 
     return (
@@ -95,7 +100,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                                     className={cn(
                                         "w-full flex items-center justify-between rounded-[var(--radius-md)] px-3 py-3 text-sm font-medium transition-all group overflow-hidden whitespace-nowrap",
                                         "text-white/70 hover:bg-white/10 hover:text-white",
-                                        isProcessing && "pointer-events-none opacity-50 grayscale"
+                                        isAppProcessing && "pointer-events-none opacity-50 grayscale"
                                     )}
                                     title={!isOpen ? item.name : undefined}
                                 >
@@ -124,7 +129,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                                                     isActive
                                                         ? "bg-white/20 text-white font-bold"
                                                         : "text-white/70 hover:bg-white/10 hover:text-white",
-                                                    isProcessing && "pointer-events-none opacity-50 grayscale"
+                                                    isAppProcessing && "pointer-events-none opacity-50 grayscale"
                                                 )}
                                                 title={!isOpen ? child.name : undefined}
                                             >
@@ -149,7 +154,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                                     isActive
                                         ? "bg-white/20 text-white font-bold"
                                         : "text-white/70 hover:bg-white/10 hover:text-white",
-                                    isProcessing && "pointer-events-none opacity-50 grayscale"
+                                    isAppProcessing && "pointer-events-none opacity-50 grayscale"
                                 )}
                                 title={!isOpen ? item.name : undefined}
                             >
@@ -174,7 +179,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                             className={({ isActive }) => cn(
                                 "flex-1 flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-3 text-sm font-medium transition-all group overflow-hidden whitespace-nowrap",
                                 isActive ? "bg-white/20 text-white font-bold" : "text-white/70 hover:bg-white/10 hover:text-white",
-                                isProcessing && "pointer-events-none opacity-50 grayscale"
+                                isAppProcessing && "pointer-events-none opacity-50 grayscale"
                             )}
                             title={!isOpen ? "Profile" : undefined}
                         >
@@ -190,10 +195,10 @@ export function Sidebar({ isOpen, toggleSidebar }) {
 
                         {isOpen && <button
                             onClick={logout}
-                            disabled={isProcessing}
+                            disabled={isAppProcessing}
                             className={cn(
                                 "flex items-center justify-center p-2.5 rounded-[var(--radius-md)] text-white/70 hover:bg-red-500/20 hover:text-red-300 transition-colors shrink-0",
-                                isProcessing && "opacity-50 cursor-not-allowed pointer-events-none grayscale"
+                                isAppProcessing && "opacity-50 cursor-not-allowed pointer-events-none grayscale"
                             )}
                             title="Log Out"
                         >
