@@ -1,14 +1,58 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import './Workshop.css';
+import useProjectStore from '../store/useProjectStore';
+import { FileText, Bot } from 'lucide-react';
 
 const Workshop = () => {
+    const { projects, fetchAllProjects } = useProjectStore();
+    const location = useLocation();
+
     const [messages, setMessages] = useState([
-        { text: "Welcome to the Advanced Workshop! Upload a .docx file or type your research question to begin.", sender: 'bot' }
+        { text: "Welcome to the DocBot Workshop! Select a document from your Active Artifacts or type your research question to begin.", sender: 'bot' }
     ]);
     const [inputValue, setInputValue] = useState('');
     const [isUploading, setIsUploading] = useState(false);
+    const [activeArtifacts, setActiveArtifacts] = useState([]);
+    const [selectedArtifact, setSelectedArtifact] = useState(null);
+
     const chatEndRef = useRef(null);
     const fileInputRef = useRef(null);
+
+    useEffect(() => {
+        fetchAllProjects();
+    }, [fetchAllProjects]);
+
+    useEffect(() => {
+        // Collect all reconstructed files as artifacts
+        const artifacts = [];
+        if (projects && projects.length > 0) {
+            projects.forEach(proj => {
+                if (proj.files && proj.files.length > 0) {
+                    proj.files.forEach(file => {
+                        if (file.originalName && file.originalName.includes('_reconstructed')) {
+                            artifacts.push({
+                                ...file,
+                                projectName: proj.name || proj.title || 'Untitled Project',
+                                projectId: proj._id
+                            });
+                        }
+                    });
+                }
+            });
+            // Sort by most recently updated
+            artifacts.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+            setActiveArtifacts(artifacts);
+
+            // Auto-select artifact if passed in navigation state
+            if (location.state?.activeArtifactId) {
+                const target = artifacts.find(a => a._id === location.state.activeArtifactId);
+                if (target) {
+                    setSelectedArtifact(target);
+                }
+            }
+        }
+    }, [projects, location.state]);
 
     useEffect(() => {
         if (chatEndRef.current) {
@@ -21,13 +65,17 @@ const Workshop = () => {
         if (!inputValue.trim()) return;
 
         const userMsg = { text: inputValue, sender: 'user' };
-        setMessages([...messages, userMsg]);
+        setMessages(prev => [...prev, userMsg]);
         setInputValue('');
 
-        // Mock AI response
+        // Mock AI response for now - logic depends on selected artifact
         setTimeout(() => {
+            const contextMsg = selectedArtifact
+                ? `I see you're asking about "${selectedArtifact.originalName}". I am analyzing the content...`
+                : "Please select an artifact from the sidebar first so I have context for your request.";
+
             setMessages(prev => [...prev, {
-                text: "I've started analyzing your request in the workshop workspace. How should we proceed with your document?",
+                text: contextMsg,
                 sender: 'bot'
             }]);
         }, 1000);
@@ -134,11 +182,43 @@ const Workshop = () => {
 
                 <div className="sidebar-group">
                     <h3>Active Artifacts</h3>
-                    <div className="empty-state">No active files</div>
+                    {activeArtifacts.length === 0 ? (
+                        <div className="empty-state">No active files found. Complete a document processing first.</div>
+                    ) : (
+                        <div className="artifact-list flex flex-col gap-2 max-h-[400px] overflow-y-auto">
+                            {activeArtifacts.map(artifact => (
+                                <button
+                                    key={artifact._id}
+                                    onClick={() => setSelectedArtifact(artifact)}
+                                    className={`flex items-start gap-3 p-3 rounded-lg text-left transition-colors border ${selectedArtifact?._id === artifact._id
+                                        ? 'bg-[#fdfceb] border-[#e1d5a6] shadow-sm'
+                                        : 'bg-white border-gray-100 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    <FileText className={`w-5 h-5 shrink-0 mt-0.5 ${selectedArtifact?._id === artifact._id ? 'text-yellow-600' : 'text-gray-400'}`} />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-semibold text-sm text-gray-800 truncate" title={artifact.originalName}>
+                                            {artifact.originalName}
+                                        </div>
+                                        <div className="text-xs text-gray-500 truncate" title={artifact.projectName}>
+                                            {artifact.projectName}
+                                        </div>
+                                    </div>
+                                    {selectedArtifact?._id === artifact._id && (
+                                        <div className="shrink-0 flex items-center h-full">
+                                            <span className="w-2 h-2 rounded-full bg-green-500 mt-1.5"></span>
+                                        </div>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="sidebar-footer">
-                    <button className="export-master-btn">Export Final Manuscript</button>
+                    <button className="export-master-btn" disabled={!selectedArtifact}>
+                        {selectedArtifact ? 'Export Final Manuscript' : 'Select Artifact to Export'}
+                    </button>
                 </div>
             </aside>
         </div>

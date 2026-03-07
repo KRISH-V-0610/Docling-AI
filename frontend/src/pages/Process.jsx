@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, CheckCircle2, SplitSquareHorizontal } from 'lucide-react';
+import { Play, CheckCircle2, SplitSquareHorizontal, Bot } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Card, CardContent } from '../components/Card';
 import { Progress } from '../components/Progress';
@@ -166,10 +166,22 @@ export function Process() {
                                                     if (finalErrors.length > 0) {
                                                         const reportPayload = finalErrors.map((word, i) => {
                                                             const correctionRaw = payload.corrections?.[word];
-                                                            // Only include if the correction meaningfully differs
-                                                            const suggestions = correctionRaw && correctionRaw.toLowerCase() !== word.toLowerCase()
-                                                                ? [correctionRaw]
-                                                                : [];
+                                                            let suggestions = [];
+
+                                                            if (correctionRaw && correctionRaw !== word) {
+                                                                suggestions.push(correctionRaw);
+                                                            } else {
+                                                                // Provide a fallback suggestion that is guaranteed to be different
+                                                                // so the Autofix button actually changes the text
+                                                                if (word === word.toUpperCase() && word.length > 2) {
+                                                                    suggestions.push(word.charAt(0) + word.slice(1).toLowerCase());
+                                                                } else if (word === word.toLowerCase()) {
+                                                                    suggestions.push(word.charAt(0).toUpperCase() + word.slice(1));
+                                                                } else {
+                                                                    suggestions.push(word.toLowerCase());
+                                                                }
+                                                            }
+
                                                             return {
                                                                 id: Date.now() + i,
                                                                 type: 'Spelling',
@@ -305,17 +317,17 @@ export function Process() {
                                 <CheckCircle2 className="h-4 w-4" /> {statusMessage}
                             </p>
 
-                            <div className="flex flex-col sm:flex-row gap-4 w-full px-4">
+                            <div className="flex flex-col sm:flex-row gap-4 w-full px-4 justify-center">
                                 <Button
                                     variant="secondary"
-                                    className="flex-1 py-3 text-sm"
+                                    className="px-6 py-3 text-sm flex-1 whitespace-nowrap"
                                     onClick={() => navigate(`/project/${reconstructProjectId}`, { state: { activeFileId: reconstructedFileId } })}
                                 >
                                     Return to Workspace
                                 </Button>
                                 <Button
                                     variant="primary"
-                                    className="flex-1 py-3 text-sm flex items-center justify-center gap-2 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-900)]"
+                                    className="px-6 py-3 text-sm flex items-center justify-center gap-2 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-900)] flex-1 whitespace-nowrap"
                                     onClick={() => {
                                         if (originalFileId) {
                                             navigate(`/validation/${reconstructProjectId}/${originalFileId}/${reconstructedFileId}`);
@@ -325,6 +337,28 @@ export function Process() {
                                     }}
                                 >
                                     <SplitSquareHorizontal className="w-4 h-4" /> Compare in Validation Area
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    className="px-6 py-3 text-sm flex items-center justify-center gap-2 border-[var(--color-primary-500)] text-[var(--color-primary-700)] hover:bg-[var(--color-primary-50)] flex-1 whitespace-nowrap"
+                                    onClick={() => {
+                                        // Auto-download the Markdown file
+                                        if (convertedContent) {
+                                            const blob = new Blob([convertedContent], { type: 'text/markdown' });
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = reconstructSourceFileName ? `${reconstructSourceFileName.replace(/\.[^.]+$/, '')}_reconstructed.md` : 'reconstructed.md';
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            document.body.removeChild(a);
+                                            URL.revokeObjectURL(url);
+                                        }
+                                        // Navigate to DocBot with context
+                                        navigate('/advance-workshop', { state: { activeArtifactId: reconstructedFileId } });
+                                    }}
+                                >
+                                    <Bot className="w-4 h-4" /> Open in DocBot
                                 </Button>
                             </div>
                         </motion.div>

@@ -19,6 +19,7 @@ import logging
 import os
 import re
 import shutil
+import zipfile
 import time
 import uuid
 from copy import deepcopy
@@ -51,7 +52,7 @@ if _ENV_FILE.exists():
 
 # ── Paths ────────────────────────────────────────────────────────────────
 # Use a directory outside the 'Assistant' folder to avoid uvicorn reload loops
-DOCUMENTS_DIR = Path("D:/Hackathon/Hack-a-Mined/documents_store").resolve()
+DOCUMENTS_DIR = Path(r"D:\CODEDB\Hackathon\HackaMineD\HackaMineD\AgentCode\documents_store").resolve()
 DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
 os.environ["DOCUMENTS_DIR"] = str(DOCUMENTS_DIR)
 
@@ -1108,7 +1109,15 @@ async def api_list_documents():
     docs = []
     for f in sorted(DOCUMENTS_DIR.glob("*.docx")):
         stat = f.stat()
-        docs.append({"filename": f.name, "size_bytes": stat.st_size, "modified": stat.st_mtime})
+        entry = {"filename": f.name, "size_bytes": stat.st_size, "modified": stat.st_mtime}
+        # Check if file is a valid docx (zip archive)
+        try:
+            with zipfile.ZipFile(str(f), "r"):
+                pass
+            entry["corrupted"] = False
+        except (zipfile.BadZipFile, Exception):
+            entry["corrupted"] = True
+        docs.append(entry)
     return docs
 
 
@@ -1129,6 +1138,12 @@ async def api_upload_document(file: UploadFile = File(...)):
     dest = DOCUMENTS_DIR / Path(file.filename).name
     with open(dest, "wb") as f:
         shutil.copyfileobj(file.file, f)
+    # Validate the uploaded file is a real docx
+    try:
+        Document(str(dest))
+    except (zipfile.BadZipFile, Exception) as exc:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail=f"Uploaded file is not a valid .docx document: {exc}")
     stat = dest.stat()
     return {"message": f"Uploaded '{dest.name}'.", "filename": dest.name, "size_bytes": stat.st_size}
 
@@ -1139,6 +1154,8 @@ async def api_get_document_info(filename: str):
         doc = _load(filename)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Document '{filename}' not found.")
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=422, detail=f"Document '{filename}' is corrupted and cannot be opened.")
     paras = doc.paragraphs
     word_count = sum(len(p.text.split()) for p in paras)
     styles_used = sorted({p.style.name for p in paras if p.style})
@@ -1168,6 +1185,8 @@ async def api_get_document_content(filename: str, start: int = 0, limit: int = 1
         doc = _load(filename)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Document '{filename}' not found.")
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=422, detail=f"Document '{filename}' is corrupted and cannot be read.")
     paras = doc.paragraphs
     total = len(paras)
     end = min(start + limit, total)
@@ -1188,6 +1207,8 @@ async def api_get_document_preview(filename: str):
         doc = _load(filename)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Document '{filename}' not found.")
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=422, detail=f"Document '{filename}' is corrupted and cannot be previewed.")
     return _docx_to_html(doc)
 
 
@@ -1198,6 +1219,8 @@ async def api_get_document_snapshot(filename: str):
         doc = _load(filename)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Document '{filename}' not found.")
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=422, detail=f"Document '{filename}' is corrupted.")
     paras = doc.paragraphs
     total = len(paras)
     word_count = sum(len(p.text.split()) for p in paras)

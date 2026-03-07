@@ -290,11 +290,12 @@ export function ProjectWorkspace() {
     }, [latexContent]);
 
     const sanitizeLatex = useCallback((code) => {
+        // ── Step 1: Structural sanitization ──
         const beginDocRegex = /\\begin\{document\}/;
         const firstBeginIndex = code.search(beginDocRegex);
         let preamble = ""; let restOfCode = code;
         if (firstBeginIndex !== -1) { preamble = code.substring(0, firstBeginIndex); restOfCode = code.substring(firstBeginIndex); }
-        else { return `\\documentclass{article}\n\\begin{document}\n${code}\n\\end{document}`; }
+        else { return `\\nonstopmode\n\\documentclass{article}\n\\begin{document}\n${code}\n\\end{document}`; }
         let hasDocClass = false;
         preamble = preamble.split('\n').filter(line => {
             if (line.trim().startsWith('\\documentclass')) { if (hasDocClass) return false; hasDocClass = true; return true; } return true;
@@ -306,7 +307,62 @@ export function ProjectWorkspace() {
         let pkgMatch;
         while ((pkgMatch = packageRegex.exec(body)) !== null) { packagesToHoist += pkgMatch[0] + "\n"; }
         body = body.replace(packageRegex, '');
-        return `${preamble}\n${packagesToHoist}\n\\begin{document}\n${body}\n\\end{document}`;
+
+        // ── Step 2: Sanitize common error-causing patterns ──
+        // Fix whitespace in includegraphics filenames
+        body = body.replace(
+            /\\includegraphics(\[.*?\])?\{([^}]*)\}/g,
+            (match, opts, filename) => {
+                const cleaned = filename.trim();
+                return cleaned !== filename ? `\\includegraphics${opts || ''}{${cleaned}}` : match;
+            }
+        );
+        // Fix unmatched braces
+        let braceDepth = 0;
+        for (const ch of body) { if (ch === '{') braceDepth++; else if (ch === '}') braceDepth--; }
+        if (braceDepth > 0) body += '}'.repeat(braceDepth);
+        // Balance \begin{env} and \end{env} pairs
+        const envBeginRegex = /\\begin\{([^}]+)\}/g;
+        const envEndRegex = /\\end\{([^}]+)\}/g;
+        const envStack = {};
+        let m;
+        while ((m = envBeginRegex.exec(body)) !== null) { envStack[m[1]] = (envStack[m[1]] || 0) + 1; }
+        while ((m = envEndRegex.exec(body)) !== null) { envStack[m[1]] = (envStack[m[1]] || 0) - 1; }
+        let envFixSuffix = '', envFixPrefix = '';
+        for (const [env, count] of Object.entries(envStack)) {
+            if (count > 0) envFixSuffix += `\\end{${env}}\n`.repeat(count);
+            else if (count < 0) envFixPrefix += `\\begin{${env}}\n`.repeat(Math.abs(count));
+        }
+        body = envFixPrefix + body + envFixSuffix;
+
+        // 2d. Handle BibTeX — texlive.net doesn't run bibtex, so replace with thebibliography
+        const hasBib = /\\bibliography\{/.test(body) || /\\bibliography\{/.test(preamble);
+        const hasBibStyle = /\\bibliographystyle\{/.test(body) || /\\bibliographystyle\{/.test(preamble);
+        if (hasBib || hasBibStyle) {
+            const citeRegex = /\\cite[tp]?\{([^}]+)\}/g;
+            const citeKeys = new Set();
+            let citeMatch;
+            while ((citeMatch = citeRegex.exec(body)) !== null) {
+                citeMatch[1].split(',').forEach(k => citeKeys.add(k.trim()));
+            }
+            body = body.replace(/\\bibliographystyle\{[^}]*\}/g, '');
+            body = body.replace(/\\bibliography\{[^}]*\}/g, '');
+            preamble = preamble.replace(/\\bibliographystyle\{[^}]*\}/g, '');
+            preamble = preamble.replace(/\\bibliography\{[^}]*\}/g, '');
+            if (citeKeys.size > 0) {
+                let bibBlock = `\n\\begin{thebibliography}{${citeKeys.size}}\n`;
+                let idx = 1;
+                for (const key of citeKeys) {
+                    bibBlock += `\\bibitem{${key}} [${idx}] Reference: \\textit{${key.replace(/_/g, '\\_')}}.\n`;
+                    idx++;
+                }
+                bibBlock += `\\end{thebibliography}\n`;
+                body += bibBlock;
+            }
+        }
+
+        // ── Step 3: Force nonstopmode ──
+        return `\\nonstopmode\n${preamble}\n${packagesToHoist}\n\\begin{document}\n${body}\n\\end{document}`;
     }, []);
 
     const handleLatexCompile = useCallback(() => {

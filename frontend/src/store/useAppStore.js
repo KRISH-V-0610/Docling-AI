@@ -66,6 +66,10 @@ const useAppStore = create((set) => ({
     addProcessLog: (log) => set((state) => ({ processLogs: [...state.processLogs, log] })),
     clearProcessLogs: () => set({ processLogs: [] }),
 
+    // Chatbot Context (populated by specific pages like ValidationArea)
+    chatContext: '',
+    setChatContext: (context) => set({ chatContext: context }),
+
     // Suggestions
     suggestions: [
         { id: 1, type: 'citation', title: 'Fix Citation Errors', description: 'Found 4 unlinked citations.', severity: 'High' },

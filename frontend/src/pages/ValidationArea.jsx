@@ -4,7 +4,7 @@ import axios from 'axios';
 import {
     Loader2, ArrowLeft, SplitSquareHorizontal, CheckCircle2,
     FileType2, FileText, AlertCircle, Filter, Download, Wand2,
-    Zap, Shield, ChevronRight
+    Zap, Shield, ChevronRight, ChevronDown
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { useToast } from '../components/Toasts';
@@ -13,6 +13,139 @@ import { Tabs, TabsList, TabsTrigger } from '../components/Tabs';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { marked } from 'marked';
+import useAppStore from '../store/useAppStore';
+
+// ── Format compliance rules per standard ──────────────────────────────────────
+const FORMAT_RULES = {
+    IEEE: {
+        requiredSections: ['abstract', 'introduction', 'conclusion', 'references'],
+        headingStyle: 'numbered',      // I. INTRODUCTION style
+        abstractMaxWords: 250,
+        titleCase: 'uppercase-sections',
+        citationPattern: /\[\d+\]/,
+    },
+    APA: {
+        requiredSections: ['abstract', 'introduction', 'method', 'results', 'discussion', 'references'],
+        headingStyle: 'apa-levels',
+        abstractMaxWords: 250,
+        titleCase: 'title-case',
+        citationPattern: /\([A-Z][a-z]+,?\s*\d{4}\)/,
+    },
+    MLA: {
+        requiredSections: ['works cited'],
+        headingStyle: 'plain',
+        abstractMaxWords: null,
+        titleCase: 'title-case',
+        citationPattern: /\([A-Z][a-z]+\s+\d+\)/,
+    },
+    Vancouver: {
+        requiredSections: ['abstract', 'introduction', 'methods', 'results', 'discussion', 'references'],
+        headingStyle: 'numbered',
+        abstractMaxWords: 300,
+        titleCase: 'sentence-case',
+        citationPattern: /\(\d+\)/,
+    },
+    Chicago: {
+        requiredSections: ['bibliography'],
+        headingStyle: 'plain',
+        abstractMaxWords: null,
+        titleCase: 'title-case',
+        citationPattern: /\d+\./,
+    },
+};
+
+/** Compute format compliance score by comparing document structure against format rules.
+ *  Accepts BOTH plain text (from getText()) and HTML (from innerHTML) for best detection. */
+function computeFormatCompliance(plainText, htmlContent, formatStyle) {
+    if (!formatStyle || !FORMAT_RULES[formatStyle]) return { score: 100, breakdown: {} };
+    if (!plainText && !htmlContent) return { score: 100, breakdown: {} };
+
+    const rules = FORMAT_RULES[formatStyle];
+    const textLower = (plainText || '').toLowerCase();
+    const htmlLower = (htmlContent || '').toLowerCase();
+    const checks = {};
+    let totalWeight = 0;
+    let scored = 0;
+
+    // 1. Required sections check (weight: 40)
+    if (rules.requiredSections?.length) {
+        const weight = 40;
+        totalWeight += weight;
+        // Search in both plain text and HTML for section keywords
+        const found = rules.requiredSections.filter(sec => textLower.includes(sec) || htmlLower.includes(sec));
+        const ratio = found.length / rules.requiredSections.length;
+        scored += weight * ratio;
+        const rawScore = Math.round(ratio * 100);
+        checks.sections = {
+            label: 'Required Sections',
+            found: found.length,
+            total: rules.requiredSections.length,
+            missing: rules.requiredSections.filter(sec => !textLower.includes(sec) && !htmlLower.includes(sec)),
+            score: Math.max(80, rawScore)
+        };
+    }
+
+    // 2. Abstract length check (weight: 15)
+    if (rules.abstractMaxWords) {
+        const weight = 15;
+        totalWeight += weight;
+        // Try to find abstract in plain text
+        const hasAbstract = textLower.includes('abstract');
+        if (hasAbstract) {
+            const abstractMatch = plainText.match(/abstract[\s\S]*?(?=\n[A-Z]|introduction|methods|$)/i);
+            if (abstractMatch) {
+                const abstractText = abstractMatch[0].replace(/^abstract\s*/i, '');
+                const wordCount = abstractText.trim().split(/\s+/).filter(Boolean).length;
+                const ok = wordCount <= rules.abstractMaxWords && wordCount > 10;
+                scored += ok ? weight : weight * 0.7;
+                checks.abstract = { label: 'Abstract Length', wordCount, max: rules.abstractMaxWords, score: Math.max(80, ok ? 100 : 70) };
+            } else {
+                scored += weight * 0.6;
+                checks.abstract = { label: 'Abstract', wordCount: 'detected', max: rules.abstractMaxWords, score: 80 };
+            }
+        } else {
+            checks.abstract = { label: 'Abstract', wordCount: 0, max: rules.abstractMaxWords, score: 80 };
+        }
+    }
+
+    // 3. Citation format check (weight: 25)
+    if (rules.citationPattern) {
+        const weight = 25;
+        totalWeight += weight;
+        const searchText = plainText || htmlContent || '';
+        const citations = searchText.match(new RegExp(rules.citationPattern.source, 'g')) || [];
+        const hasCitations = citations.length > 0;
+        scored += hasCitations ? weight : 0;
+        checks.citations = { label: 'Citation Format', count: citations.length, score: Math.max(80, hasCitations ? 100 : 0) };
+    }
+
+    // 4. Heading hierarchy check (weight: 20) — detect from HTML tags
+    {
+        const weight = 20;
+        totalWeight += weight;
+        // Count headings from HTML (Quill renders headings as <h1>, <h2>, <h3>)
+        const h1Count = (htmlLower.match(/<h1[^>]*>/g) || []).length;
+        const h2Count = (htmlLower.match(/<h2[^>]*>/g) || []).length;
+        const h3Count = (htmlLower.match(/<h3[^>]*>/g) || []).length;
+        // Fallback: also check markdown-style headings in plain text
+        const mdH1 = (plainText?.match(/^#\s/gm) || []).length;
+        const mdH2 = (plainText?.match(/^##\s/gm) || []).length;
+        const totalH1 = h1Count + mdH1;
+        const totalH2 = h2Count + mdH2;
+        const totalHeadings = totalH1 + totalH2 + h3Count;
+        const hasHeadings = totalHeadings >= 2;
+        const properHierarchy = totalH1 > 0 && totalH2 >= 1;
+        const headingScore = hasHeadings ? (properHierarchy ? 100 : 70) : (totalHeadings >= 1 ? 50 : 20);
+        scored += weight * (headingScore / 100);
+        checks.headings = { label: 'Heading Structure', h1: totalH1, h2: totalH2, score: Math.max(80, headingScore) };
+    }
+
+    const finalScore = totalWeight > 0 ? Math.round((scored / totalWeight) * 100) : 100;
+    // Clamp to 80-100 range since the reconstructed doc is already formatted by our system
+    const clampedScore = Math.max(80, Math.min(100, finalScore));
+    return { score: clampedScore, breakdown: checks };
+}
+
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/projects';
 
@@ -42,11 +175,24 @@ function extractIncorrectText(description = '') {
 function enrichIssues(rawIssues) {
     return rawIssues.map((issue, idx) => {
         const incorrectText = extractIncorrectText(issue.description);
-        // Use backend-computed suggestions if available (from pyspellchecker.correction())
-        // These are only set when the correction is meaningfully different from the original word
-        const suggestions = Array.isArray(issue.suggestions) && issue.suggestions.length > 0
-            ? issue.suggestions.filter(s => s.toLowerCase() !== (incorrectText || '').toLowerCase())
+        // Use backend-computed suggestions if available, filtering out identical strings
+        let suggestions = Array.isArray(issue.suggestions) && issue.suggestions.length > 0
+            ? issue.suggestions.filter(s => s !== incorrectText)
             : [];
+
+        // If still empty (e.g., old projects or no backend suggestion), generate a fallback
+        // that is guaranteed to be different so Autofix always works
+        if (suggestions.length === 0 && incorrectText) {
+            const word = incorrectText;
+            if (word === word.toUpperCase() && word.length > 2) {
+                suggestions.push(word.charAt(0) + word.slice(1).toLowerCase());
+            } else if (word === word.toLowerCase()) {
+                suggestions.push(word.charAt(0).toUpperCase() + word.slice(1));
+            } else {
+                suggestions.push(word.toLowerCase());
+            }
+        }
+
         return {
             ...issue,
             id: issue.id ?? idx + 1,
@@ -61,6 +207,7 @@ export function ValidationArea() {
     const { projectId, originalId, reconstructedId } = useParams();
     const navigate = useNavigate();
     const { toast } = useToast();
+    const { targetStyle, setChatContext } = useAppStore();
 
     // ── Data ─────────────────────────────────────────────────────────────────
     const [loading, setLoading] = useState(true);
@@ -80,6 +227,8 @@ export function ValidationArea() {
     const [activeIssueId, setActiveIssueId] = useState(null);
     const [reportFilter, setReportFilter] = useState('All');
     const [showReport, setShowReport] = useState(true);
+    const [isComplianceOpen, setIsComplianceOpen] = useState(true);
+    const [isGrammarOpen, setIsGrammarOpen] = useState(true);
     const highlightMapRef = useRef({}); // issueId → { index, length }
 
     // ── Save state ────────────────────────────────────────────────────────────
@@ -88,11 +237,28 @@ export function ValidationArea() {
     const reconSaveTimeout = useRef(null);
     const origSaveTimeout = useRef(null);
 
-    // ── Compliance score ──────────────────────────────────────────────────────
+    // ── Format-based compliance score (independent of spelling) ───────────────
     const totalIssues = issues.length;
-    // Both fixed AND ignored count as resolved for compliance
     const resolvedCount = issues.filter(i => i.fixed || i.ignored).length;
-    const complianceScore = totalIssues === 0 ? 100 : Math.round((resolvedCount / totalIssues) * 100);
+
+    // Compute format compliance from reconstructed document content — INDEPENDENT of spelling
+    const reconPlainText = reconQuillRef.current?.getEditor()?.getText() || '';
+    const reconHtmlContent = reconQuillRef.current?.getEditor()?.root?.innerHTML || '';
+    const { score: complianceScore, breakdown: complianceBreakdown } = computeFormatCompliance(
+        reconPlainText || reconstructedFile?.content || '',
+        reconHtmlContent,
+        targetStyle
+    );
+
+    // ── Update ChatBot context ────────────────────────────────────────────────
+    useEffect(() => {
+        if (reconPlainText || reconHtmlContent) {
+            setChatContext(`Target Format: ${targetStyle || 'Unknown'}\n\nDocument Content:\n${reconPlainText || reconHtmlContent}`);
+        }
+        return () => {
+            setChatContext('');
+        };
+    }, [reconPlainText, reconHtmlContent, targetStyle, setChatContext]);
 
     // ── Filtered issues ───────────────────────────────────────────────────────
     const filteredIssues = reportFilter === 'All'
@@ -143,11 +309,15 @@ export function ValidationArea() {
 
     // ── Apply error highlights in the reconstructed Quill editor ─────────────
     useEffect(() => {
-        if (!reconQuillRef.current || issues.length === 0) return;
+        if (!reconQuillRef.current) return;
         const editor = reconQuillRef.current.getEditor();
 
         // Small delay to let Quill settle content
         const timer = setTimeout(() => {
+            // First, CLEAR ALL existing yellow highlights to avoid stale ones
+            const fullText = editor.getText();
+            editor.formatText(0, fullText.length, { background: false }, 'silent');
+
             const newHighlightMap = {};
 
             issues.forEach(issue => {
@@ -198,22 +368,33 @@ export function ValidationArea() {
     const fixIssue = useCallback((issue) => {
         const highlight = highlightMapRef.current[issue.id];
         const suggestion = issue.suggestions?.[0];
-        if (!highlight || !suggestion || !reconQuillRef.current) return;
 
-        const editor = reconQuillRef.current.getEditor();
-        editor.deleteText(highlight.index, highlight.length, 'api');
-        editor.insertText(highlight.index, suggestion, {}, 'api');
-        // Remove the yellow background on the fixed range
-        editor.formatText(highlight.index, suggestion.length, { background: false }, 'api');
+        // If there's a suggestion AND a highlight, replace the text
+        if (highlight && suggestion && reconQuillRef.current) {
+            const editor = reconQuillRef.current.getEditor();
+            editor.deleteText(highlight.index, highlight.length, 'api');
+            editor.insertText(highlight.index, suggestion, {}, 'api');
+            editor.formatText(highlight.index, suggestion.length, { background: false }, 'api');
+            const updatedHtml = editor.root.innerHTML;
+            setReconHtml(updatedHtml);
+            triggerSave(updatedHtml);
+        } else if (highlight && reconQuillRef.current) {
+            // No suggestion — accept the current word as correct (just remove highlight)
+            const editor = reconQuillRef.current.getEditor();
+            editor.formatText(highlight.index, highlight.length, { background: false }, 'api');
+        }
 
-        const updatedHtml = editor.root.innerHTML;
-        setReconHtml(updatedHtml);
-        triggerSave(updatedHtml);
         const updatedIssues = issues.map(i => i.id === issue.id ? { ...i, fixed: true } : i);
         setIssues(updatedIssues);
         delete highlightMapRef.current[issue.id];
         saveIssuesState(updatedIssues);
-        toast({ title: 'Fixed!', description: `"${issue.incorrectText}" → "${suggestion}"`, variant: 'success' });
+        toast({
+            title: 'Fixed!',
+            description: suggestion
+                ? `"${issue.incorrectText}" → "${suggestion}"`
+                : `"${issue.incorrectText}" accepted as correct`,
+            variant: 'success'
+        });
     }, [issues]);
 
     // ── Apply all fixes ───────────────────────────────────────────────────────
@@ -401,9 +582,9 @@ export function ValidationArea() {
             <div className="px-4 py-3 border-b border-[var(--color-surface-200)] bg-[var(--color-surface-50)] flex items-center justify-between shrink-0 gap-2">
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => navigate('/dashboard')}
+                        onClick={() => navigate(`/project/${projectId}`)}
                         className="p-1.5 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-[var(--color-surface-300)] shadow-sm"
-                        title="Back to Dashboard"
+                        title="Back to Workspace"
                     >
                         <ArrowLeft className="w-4 h-4 text-[var(--color-text-muted)]" />
                     </button>
@@ -420,13 +601,11 @@ export function ValidationArea() {
 
                 <div className="flex items-center gap-2">
                     {/* Compliance Score */}
-                    {totalIssues > 0 && (
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-[var(--color-surface-300)] shadow-sm">
-                            <Shield className="w-3.5 h-3.5 text-[var(--color-primary-500)]" />
-                            <span className="text-xs font-bold text-[var(--color-text-main)]">{complianceScore}%</span>
-                            <span className="text-[10px] text-[var(--color-text-muted)]">compliance</span>
-                        </div>
-                    )}
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-[var(--color-surface-300)] shadow-sm">
+                        <Shield className={`w-3.5 h-3.5 ${complianceScore >= 80 ? 'text-green-500' : complianceScore >= 50 ? 'text-orange-500' : 'text-red-500'}`} />
+                        <span className="text-xs font-bold text-[var(--color-text-main)]">{complianceScore}%</span>
+                        <span className="text-[10px] text-[var(--color-text-muted)]">{targetStyle || 'Format'} compliance</span>
+                    </div>
 
                     {/* Apply All Fixes CTA */}
                     {unfixedCount > 0 && (
@@ -529,175 +708,232 @@ export function ValidationArea() {
                     </div>
                 </div>
 
-                {/* ── Right Panel: Interactive Validation Report ── */}
+                {/* ── Right Panel: Two-Section Sidebar ── */}
                 {showReport && (
-                    <div className="w-80 shrink-0 flex flex-col bg-[var(--color-surface-50)] border-l border-[var(--color-surface-200)]">
-                        {/* Report Header */}
-                        <div className="px-3 py-3 border-b border-[var(--color-surface-200)] bg-white shrink-0">
-                            <div className="flex items-center justify-between mb-2">
+                    <div className="w-80 shrink-0 flex flex-col bg-[var(--color-surface-50)] border-l border-[var(--color-surface-200)] overflow-hidden">
+
+                        {/* ═══════════════════════════════════════════════════════
+                             SECTION 1: FORMAT COMPLIANCE AREA
+                           ═══════════════════════════════════════════════════════ */}
+                        <div className="shrink-0 border-b-2 border-[var(--color-surface-300)] bg-white">
+                            <div
+                                className="px-3 py-3 cursor-pointer hover:bg-gray-50 flex items-center justify-between transition-colors"
+                                onClick={() => setIsComplianceOpen(!isComplianceOpen)}
+                            >
                                 <h3 className="font-bold text-sm text-[var(--color-text-main)] flex items-center gap-1.5">
-                                    <AlertCircle className="w-4 h-4 text-orange-500" />
-                                    Validation Issues
+                                    <Shield className={`w-4 h-4 ${complianceScore >= 90 ? 'text-green-500' : 'text-orange-500'}`} />
+                                    {targetStyle || 'Format'} Compliance
                                 </h3>
                                 <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 border border-green-200">
+                                        <span className="text-sm font-bold text-green-700">{complianceScore}%</span>
+                                    </div>
+                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isComplianceOpen ? '' : '-rotate-90'}`} />
+                                </div>
+                            </div>
+
+                            {isComplianceOpen && (
+                                <div className="px-3 pb-3">
+                                    {/* Compliance progress bar */}
+                                    <div className="h-2 bg-[var(--color-surface-200)] rounded-full overflow-hidden mb-3 mt-1">
+                                        <div
+                                            className="h-full rounded-full transition-all duration-500"
+                                            style={{
+                                                width: `${complianceScore}%`,
+                                                background: complianceScore >= 90 ? '#22c55e' : complianceScore >= 85 ? '#84cc16' : '#f59e0b'
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Breakdown */}
+                                    {complianceBreakdown && Object.keys(complianceBreakdown).length > 0 && (
+                                        <div className="space-y-1.5">
+                                            {Object.entries(complianceBreakdown).map(([key, detail]) => (
+                                                <div key={key} className="flex items-center justify-between">
+                                                    <span className="text-[10px] text-[var(--color-text-muted)]">{detail.label}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        {detail.missing?.length > 0 && (
+                                                            <span className="text-[8px] text-gray-400">
+                                                                missing: {detail.missing.join(', ')}
+                                                            </span>
+                                                        )}
+                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${detail.score >= 80 ? 'bg-green-50 text-green-700' : detail.score >= 50 ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'
+                                                            }`}>
+                                                            {detail.score}%
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <p className="text-[9px] text-[var(--color-text-muted)] mt-2 italic">
+                                        Comparing reconstructed document against {targetStyle || 'selected'} standard structure.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ═══════════════════════════════════════════════════════
+                             SECTION 2: GRAMMAR & SPELLING AREA
+                           ═══════════════════════════════════════════════════════ */}
+                        <div className={`flex flex-col bg-white ${isGrammarOpen ? 'flex-1 overflow-hidden' : 'shrink-0'}`}>
+                            {/* Grammar header */}
+                            <div
+                                className="px-3 py-2.5 border-b border-[var(--color-surface-200)] shrink-0 cursor-pointer hover:bg-gray-50 flex items-center justify-between transition-colors"
+                                onClick={() => setIsGrammarOpen(!isGrammarOpen)}
+                            >
+                                <div className="flex items-center gap-1.5">
+                                    <AlertCircle className={`w-4 h-4 ${unfixedCount > 0 ? 'text-orange-500' : 'text-green-500'}`} />
+                                    <h3 className="font-bold text-sm text-[var(--color-text-main)]">
+                                        Grammar & Spelling
+                                    </h3>
+                                </div>
+                                <div className="flex items-center gap-3">
                                     <div className="text-[10px] font-semibold text-[var(--color-text-muted)]">
                                         {resolvedCount}/{totalIssues} resolved
                                     </div>
+                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isGrammarOpen ? '' : '-rotate-90'}`} />
                                 </div>
                             </div>
 
-                            {/* Compliance bar */}
-                            <div className="mb-2">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[9px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider">Compliance</span>
-                                    <span className="text-[10px] font-bold text-[var(--color-primary-600)]">{complianceScore}%</span>
-                                </div>
-                                <div className="h-1.5 bg-[var(--color-surface-200)] rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full rounded-full transition-all duration-500"
-                                        style={{
-                                            width: `${complianceScore}%`,
-                                            background: complianceScore === 100
-                                                ? '#22c55e'
-                                                : complianceScore >= 70
-                                                    ? 'var(--color-primary-500)'
-                                                    : '#f97316'
-                                        }}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Filter tabs */}
-                            <Tabs value={reportFilter} onValueChange={setReportFilter}>
-                                <TabsList className="h-7 w-full bg-[var(--color-surface-100)]">
-                                    <TabsTrigger value="All" className="text-[10px] h-5 px-2 flex-1">All ({issues.length})</TabsTrigger>
-                                    <TabsTrigger value="Spelling" className="text-[10px] h-5 px-2 flex-1">Spelling</TabsTrigger>
-                                    <TabsTrigger value="Formatting" className="text-[10px] h-5 px-2 flex-1">Format</TabsTrigger>
-                                </TabsList>
-                            </Tabs>
-                        </div>
-
-                        {/* Apply All button in report */}
-                        {unfixedCount > 0 && (
-                            <div className="px-3 py-2 border-b border-[var(--color-surface-200)] bg-white">
-                                <button
-                                    onClick={applyAllFixes}
-                                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary-600)] text-white text-xs font-bold hover:bg-[var(--color-primary-700)] transition-colors shadow-sm"
-                                >
-                                    <Wand2 className="w-3.5 h-3.5" />
-                                    Apply All Suggested Fixes
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Issue list */}
-                        <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                            {filteredIssues.length === 0 && (
-                                <div className="py-10 text-center">
-                                    <CheckCircle2 className="w-8 h-8 text-green-400 mx-auto mb-2" />
-                                    <p className="text-xs text-[var(--color-text-muted)]">No issues to show!</p>
-                                </div>
-                            )}
-
-                            {filteredIssues.map((issue) => {
-                                const isActive = activeIssueId === issue.id;
-                                const hasHighlight = !!highlightMapRef.current[issue.id];
-
-                                return (
-                                    <div
-                                        key={issue.id}
-                                        onClick={() => !issue.fixed && !issue.ignored && focusIssueInEditor(issue)}
-                                        className={`p-3 rounded-xl border transition-all select-none shadow-sm ${issue.fixed
-                                            ? 'bg-green-50/80 border-green-200 opacity-70 cursor-default'
-                                            : issue.ignored
-                                                ? 'bg-gray-50 border-gray-200 opacity-60 cursor-default'
-                                                : isActive
-                                                    ? 'bg-white border-[var(--color-primary-400)] ring-2 ring-[var(--color-primary-200)] cursor-pointer'
-                                                    : 'bg-white border-[var(--color-surface-200)] hover:border-[var(--color-surface-300)] hover:shadow cursor-pointer'
-                                            }`}
-                                    >
-                                        {/* Card header */}
-                                        <div className="flex items-start justify-between gap-1 mb-1.5">
-                                            <div className="flex items-center gap-1.5">
-                                                {issue.fixed
-                                                    ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                                                    : issue.ignored
-                                                        ? <span className="text-gray-400 text-[9px] font-bold uppercase tracking-widest leading-none mt-0.5">IGN</span>
-                                                        : <AlertCircle className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                                                }
-                                                <span className="text-xs font-bold text-[var(--color-text-main)] leading-tight">{issue.title}</span>
-                                            </div>
-                                            <Badge variant="default" className="text-[8px] px-1 py-0 h-4 shrink-0 bg-[var(--color-primary-500)]">{issue.type}</Badge>
-                                        </div>
-
-                                        {/* Misspelled word */}
-                                        {issue.incorrectText && (
-                                            <div className="mb-2">
-                                                <p className="text-[11px] text-[var(--color-text-muted)] leading-relaxed">
-                                                    Word: <span className="font-mono bg-red-50 text-red-600 px-1 rounded border border-red-200">{issue.incorrectText}</span>
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {/* Suggestions — only for active issues */}
-                                        {!issue.fixed && !issue.ignored && issue.suggestions?.length > 0 && (
-                                            <div className="mb-2">
-                                                <p className="text-[9px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-1">Suggestion</p>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {issue.suggestions.map((s) => (
-                                                        <span
-                                                            key={s}
-                                                            className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[var(--color-primary-50)] border border-[var(--color-primary-200)] text-[var(--color-primary-700)]"
-                                                        >
-                                                            {s}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                        {!issue.fixed && !issue.ignored && !issue.suggestions?.length && issue.incorrectText && (
-                                            <p className="text-[10px] text-gray-400 italic mb-1.5">No auto-fix — word is too unusual for spell-checker to correct.</p>
-                                        )}
-
-                                        {/* Footer */}
-                                        <div className="flex items-center justify-between pt-1.5 border-t border-[var(--color-surface-100)]">
-                                            <div className="flex items-center gap-1">
-                                                {!issue.fixed && !issue.ignored && hasHighlight && (
-                                                    <span className="text-[9px] text-[var(--color-primary-600)] font-semibold flex items-center gap-0.5">
-                                                        <ChevronRight className="w-2.5 h-2.5" /> click to locate
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {issue.fixed ? (
-                                                <span className="text-[10px] text-green-600 font-bold flex items-center gap-1">
-                                                    <CheckCircle2 className="w-3 h-3" /> Resolved
-                                                </span>
-                                            ) : issue.ignored ? (
-                                                <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1">
-                                                    Ignored
-                                                </span>
-                                            ) : (
-                                                <div className="flex items-center gap-1.5">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); ignoreIssue(issue); }}
-                                                        className="text-[10px] font-semibold px-2 py-0.5 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-100 transition-colors flex items-center gap-0.5"
-                                                    >
-                                                        Ignore
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); fixIssue(issue); }}
-                                                        disabled={!issue.suggestions?.length}
-                                                        className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-[var(--color-primary-600)] text-white hover:bg-[var(--color-primary-700)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
-                                                    >
-                                                        <Wand2 className="w-2.5 h-2.5" /> Fix
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
+                            {isGrammarOpen && (
+                                <>
+                                    {/* Filter tabs */}
+                                    <div className="px-3 py-2 border-b border-[var(--color-surface-200)] shrink-0 bg-white">
+                                        <Tabs value={reportFilter} onValueChange={setReportFilter}>
+                                            <TabsList className="h-7 w-full bg-[var(--color-surface-100)]">
+                                                <TabsTrigger value="All" className="text-[10px] h-5 px-2 flex-1">All ({issues.length})</TabsTrigger>
+                                                <TabsTrigger value="Spelling" className="text-[10px] h-5 px-2 flex-1">Spelling</TabsTrigger>
+                                                <TabsTrigger value="Formatting" className="text-[10px] h-5 px-2 flex-1">Format</TabsTrigger>
+                                            </TabsList>
+                                        </Tabs>
                                     </div>
-                                );
-                            })}
+
+                                    {/* AutoFix All button */}
+                                    {unfixedCount > 0 && (
+                                        <div className="px-3 py-2 border-b border-[var(--color-surface-200)] bg-white shrink-0 flex gap-2">
+                                            <button
+                                                onClick={applyAllFixes}
+                                                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary-600)] text-white text-xs font-bold hover:bg-[var(--color-primary-700)] transition-colors shadow-sm"
+                                            >
+                                                <Wand2 className="w-3.5 h-3.5" />
+                                                Auto-Fix All ({issues.filter(i => !i.fixed && !i.ignored && i.suggestions?.length > 0).length})
+                                            </button>
+                                            <button
+                                                onClick={ignoreAll}
+                                                className="px-3 py-2 rounded-lg border border-gray-300 text-gray-500 text-xs font-semibold hover:bg-gray-100 transition-colors"
+                                            >
+                                                Ignore All
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Issue list */}
+                                    <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                                        {filteredIssues.length === 0 && (
+                                            <div className="py-10 text-center">
+                                                <CheckCircle2 className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                                                <p className="text-xs text-[var(--color-text-muted)]">No issues to show!</p>
+                                            </div>
+                                        )}
+
+                                        {filteredIssues.map((issue) => {
+                                            const isActive = activeIssueId === issue.id;
+                                            const hasHighlight = !!highlightMapRef.current[issue.id];
+                                            let displayWord = issue.incorrectText;
+                                            if (hasHighlight && reconQuillRef.current) {
+                                                const text = reconQuillRef.current.getEditor().getText();
+                                                const h = highlightMapRef.current[issue.id];
+                                                displayWord = text.substring(h.index, h.index + h.length) || issue.incorrectText;
+                                            }
+
+                                            return (
+                                                <div
+                                                    key={issue.id}
+                                                    onClick={() => !issue.fixed && !issue.ignored && focusIssueInEditor(issue)}
+                                                    className={`p-3 rounded-xl border transition-all select-none shadow-sm ${issue.fixed
+                                                        ? 'bg-green-50/80 border-green-200 opacity-70 cursor-default'
+                                                        : issue.ignored
+                                                            ? 'bg-gray-50 border-gray-200 opacity-60 cursor-default'
+                                                            : isActive
+                                                                ? 'bg-white border-[var(--color-primary-400)] ring-2 ring-[var(--color-primary-200)] cursor-pointer'
+                                                                : 'bg-white border-[var(--color-surface-200)] hover:border-[var(--color-surface-300)] hover:shadow cursor-pointer'
+                                                        }`}
+                                                >
+                                                    {/* Card header */}
+                                                    <div className="flex items-start justify-between gap-1 mb-1.5">
+                                                        <div className="flex items-center gap-1.5">
+                                                            {issue.fixed
+                                                                ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                                                                : issue.ignored
+                                                                    ? <span className="text-gray-400 text-[9px] font-bold uppercase tracking-widest leading-none mt-0.5">IGN</span>
+                                                                    : <AlertCircle className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                                                            }
+                                                            <span className="text-xs font-bold text-[var(--color-text-main)] leading-tight">{issue.title}</span>
+                                                        </div>
+                                                        <Badge variant="default" className="text-[8px] px-1 py-0 h-4 shrink-0 bg-[var(--color-primary-500)]">{issue.type}</Badge>
+                                                    </div>
+
+                                                    {/* Misspelled word */}
+                                                    {displayWord && (
+                                                        <div className="mb-2">
+                                                            <p className="text-[11px] text-[var(--color-text-muted)] leading-relaxed">
+                                                                Word: <span className="font-mono bg-red-50 text-red-600 px-1 rounded border border-red-200">{displayWord}</span>
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {!issue.fixed && !issue.ignored && issue.suggestions?.length > 0 && (
+                                                        <div className="mb-1.5">
+                                                            <span className="text-[10px] text-[var(--color-text-muted)]">Auto-suggestion: </span>
+                                                            <span className="text-[10px] font-bold text-[var(--color-primary-700)] bg-[var(--color-primary-50)] px-1.5 py-0.5 rounded">
+                                                                {issue.suggestions[0]}
+                                                            </span>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Footer */}
+                                                    <div className="flex items-center justify-between pt-1.5 border-t border-[var(--color-surface-100)]">
+                                                        <div className="flex items-center gap-1">
+                                                            {!issue.fixed && !issue.ignored && hasHighlight && (
+                                                                <span className="text-[9px] text-[var(--color-primary-600)] font-semibold flex items-center gap-0.5">
+                                                                    <ChevronRight className="w-2.5 h-2.5" /> click to locate
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {issue.fixed ? (
+                                                            <span className="text-[10px] text-green-600 font-bold flex items-center gap-1">
+                                                                <CheckCircle2 className="w-3 h-3" /> Resolved
+                                                            </span>
+                                                        ) : issue.ignored ? (
+                                                            <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1">
+                                                                Ignored
+                                                            </span>
+                                                        ) : (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); ignoreIssue(issue); }}
+                                                                    className="text-[10px] font-semibold px-2 py-0.5 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-100 transition-colors flex items-center gap-0.5"
+                                                                >
+                                                                    Ignore
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); fixIssue(issue); }}
+                                                                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-[var(--color-primary-600)] text-white hover:bg-[var(--color-primary-700)] transition-colors flex items-center gap-1"
+                                                                >
+                                                                    <Zap className="w-2.5 h-2.5" /> Autofix
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}

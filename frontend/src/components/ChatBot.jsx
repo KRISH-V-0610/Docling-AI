@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import useAppStore from '../store/useAppStore';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Send } from 'lucide-react';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v2';
 
 const ChatBot = () => {
     const [isHovered, setIsHovered] = useState(false);
@@ -7,8 +13,10 @@ const ChatBot = () => {
     const [inputValue, setInputValue] = useState('');
     const [messages, setMessages] = useState([]);
     const [imageIndex, setImageIndex] = useState(0);
+    const [loading, setLoading] = useState(false);
     const chatEndRef = useRef(null);
     const navigate = useNavigate();
+    const { chatContext } = useAppStore();
 
     const images = [
         '/image-removebg-preview (1) (1).png',
@@ -29,21 +37,43 @@ const ChatBot = () => {
         }
     }, [messages]);
 
-    const handleSend = (e) => {
+    const handleSend = async (e) => {
         e.preventDefault();
-        if (!inputValue.trim()) return;
+        if (!inputValue.trim() || loading) return;
 
-        const newUserMessage = { text: inputValue, sender: 'user' };
+        const userText = inputValue;
+        const newUserMessage = { text: userText, sender: 'user' };
         setMessages([...messages, newUserMessage]);
         setInputValue('');
         setIsOpen(true);
+        setLoading(true);
 
-        setTimeout(() => {
+        try {
+            const res = await fetch(`${API_URL}/ask`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: userText,
+                    context: chatContext || undefined
+                })
+            });
+
+            if (!res.ok) throw new Error("Failed to fetch from chatbot API");
+
+            const data = await res.json();
             setMessages((prev) => [
                 ...prev,
-                { text: "I'm Docyyy!! How can I help you today?", sender: 'bot' }
+                { text: data.response, sender: 'bot' }
             ]);
-        }, 1000);
+        } catch (error) {
+            console.error("Chatbot error:", error);
+            setMessages((prev) => [
+                ...prev,
+                { text: "Sorry, I'm having trouble connecting right now.", sender: 'bot' }
+            ]);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -62,7 +92,7 @@ const ChatBot = () => {
                     <div className="px-4 py-2 bg-[#3a4d2c] text-[#fffcf0] flex items-center justify-between">
                         <div className="flex items-center gap-[8px]">
                             <span className="font-bold text-sm">Docyyy!!</span>
-                            
+
                         </div>
                         <button
                             className="bg-transparent border-none text-[#fffcf0] cursor-pointer p-[4px] flex items-center opacity-60 hover:opacity-100 transition-opacity"
@@ -89,14 +119,31 @@ const ChatBot = () => {
                         {messages.map((msg, i) => (
                             <div
                                 key={i}
-                                className={`px-3.5 py-2 rounded-[15px] max-w-[85%] text-[13px] ${msg.sender === 'bot'
-                                        ? 'bg-[#e9e5d3] text-[#2c3623] rounded-bl-[4px]'
-                                        : 'bg-[#3a4d2c] text-[#fffcf0] rounded-br-[4px] self-end'
+                                className={`px-3.5 py-2 rounded-[15px] text-[13px] ${msg.sender === 'bot'
+                                    ? 'bg-[#e9e5d3] text-[#2c3623] rounded-bl-[4px] mr-8'
+                                    : 'bg-[#3a4d2c] text-[#fffcf0] rounded-br-[4px] self-end max-w-[85%]'
                                     }`}
                             >
-                                {msg.text}
+                                {msg.sender === 'bot' ? (
+                                    <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 text-[13px] text-[#2c3623] leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                            {msg.text}
+                                        </ReactMarkdown>
+                                    </div>
+                                ) : (
+                                    <span className="whitespace-pre-wrap">{msg.text}</span>
+                                )}
                             </div>
                         ))}
+                        {loading && (
+                            <div className="bg-[#e9e5d3] text-[#2c3623] px-3.5 py-2 rounded-[15px_15px_15px_4px] max-w-[85%] text-[13px] self-start flex items-center gap-1.5 opacity-70">
+                                <span className="flex gap-1">
+                                    <span className="w-1.5 h-1.5 bg-[#2c3623] rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                    <span className="w-1.5 h-1.5 bg-[#2c3623] rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                    <span className="w-1.5 h-1.5 bg-[#2c3623] rounded-full animate-bounce"></span>
+                                </span>
+                            </div>
+                        )}
                         <div ref={chatEndRef} />
                     </div>
 
@@ -108,7 +155,15 @@ const ChatBot = () => {
                             placeholder="Ask me anything..."
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
+                            disabled={loading}
                         />
+                        <button
+                            type="submit"
+                            disabled={!inputValue.trim() || loading}
+                            className="p-2 bg-[#3a4d2c] text-[#fffcf0] rounded-full disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#4a5d3c] transition-colors flex items-center justify-center"
+                        >
+                            <Send className="w-4 h-4" />
+                        </button>
                     </form>
 
                     {/* Workshop Navigation */}
@@ -124,9 +179,15 @@ const ChatBot = () => {
 
                 {/* Character Trigger */}
                 <div
-                    className="w-[120px] h-[120px] flex items-center justify-center pd-2 mr-8 mb-8 drop-shadow-[0_8px_20px_rgba(0,0,0,0.12)]"
+                    className="relative w-[120px] h-[120px] flex items-center justify-center pd-2 mr-8 mb-8 drop-shadow-[0_8px_20px_rgba(0,0,0,0.12)] group/character"
                     onClick={() => setIsOpen(true)}
                 >
+                    {/* Tooltip */}
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-white text-[#2c3623] text-[10px] font-bold py-1 px-3 rounded-full shadow-md opacity-0 group-hover/character:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap border border-[#e9e5d3]">
+                        doc! doc!
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rotate-45 border-r border-b border-[#e9e5d3]"></div>
+                    </div>
+
                     <img
                         src={images[imageIndex]}
                         alt="Docyyy!!"

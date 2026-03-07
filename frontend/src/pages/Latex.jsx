@@ -95,8 +95,9 @@ export function Latex() {
     };
 
     // Robust pre-processor to handle improperly nested document structures
+    // AND make compilation resilient so errors in one section don't break entire output
     const sanitizeLatex = (code) => {
-        // Extract the preamble (everything before the first \begin{document})
+        // ── Step 1: Structural sanitization (same as before) ──
         const beginDocRegex = /\\begin\{document\}/;
         const firstBeginIndex = code.search(beginDocRegex);
         let preamble = "";
@@ -106,8 +107,7 @@ export function Latex() {
             preamble = code.substring(0, firstBeginIndex);
             restOfCode = code.substring(firstBeginIndex);
         } else {
-            // No begin document found, might just be snippets
-            return `\\documentclass{article}\n\\begin{document}\n${code}\n\\end{document}`;
+            return `\\nonstopmode\n\\documentclass{article}\n\\begin{document}\n${code}\n\\end{document}`;
         }
 
         // Clean up preamble: keep ONLY the first \documentclass
@@ -125,29 +125,112 @@ export function Latex() {
             preamble = '\\documentclass{article}\n' + preamble;
         }
 
-        // Strip ALL structural tags from the body so they don't break the compiler
-        // This handles cases where users paste raw documents inside other documents
+        // Strip ALL structural tags from the body
         let body = restOfCode.replace(/\\begin\{document\}/g, '');
         body = body.replace(/\\end\{document\}/g, '');
         body = body.replace(/\\documentclass(\[.*?\])?\{.*?\}/g, '');
 
-        // Extract any \usepackage or \usetikzlibrary that got trapped in the body content
-        // LaTeX strictly requires these to be in the preamble.
+        // Extract any \usepackage or \usetikzlibrary that got trapped in the body
         const packageRegex = /\\(usepackage|usetikzlibrary)(\[.*?\])?\{.*?\}/g;
         let packagesToHoist = "";
-
-        // Find them all and hoist them
         let pkgMatch;
         while ((pkgMatch = packageRegex.exec(body)) !== null) {
             packagesToHoist += pkgMatch[0] + "\n";
         }
-
-        // Remove the hoisted packages from the body content
         body = body.replace(packageRegex, '');
 
-        // Reassemble into a single, valid LaTeX structure
-        // Prepend hoisted packages immediately before \begin{document}
-        return `${preamble}\n${packagesToHoist}\n\\begin{document}\n${body}\n\\end{document}`;
+        // ── Step 2: Sanitize common error-causing patterns ──
+
+        // 2a. Comment out \includegraphics pointing to files that likely don't exist
+        // (unless the user uploaded assets — we can't know here, so we leave them)
+        // We DO fix common mistakes like spaces in filenames or missing extensions
+        body = body.replace(
+            /\\includegraphics(\[.*?\])?\{([^}]*)\}/g,
+            (match, opts, filename) => {
+                // Trim whitespace from filename
+                const cleaned = filename.trim();
+                if (cleaned !== filename) {
+                    return `\\includegraphics${opts || ''}{${cleaned}}`;
+                }
+                return match;
+            }
+        );
+
+        // 2b. Fix unmatched braces — count { and } and add missing closing braces
+        let braceDepth = 0;
+        for (const ch of body) {
+            if (ch === '{') braceDepth++;
+            else if (ch === '}') braceDepth--;
+        }
+        if (braceDepth > 0) {
+            body += '}'.repeat(braceDepth);
+        }
+
+        // 2c. Balance \begin{env} and \end{env} pairs
+        const envBeginRegex = /\\begin\{([^}]+)\}/g;
+        const envEndRegex = /\\end\{([^}]+)\}/g;
+        const envStack = {};
+        let m;
+        while ((m = envBeginRegex.exec(body)) !== null) {
+            const env = m[1];
+            envStack[env] = (envStack[env] || 0) + 1;
+        }
+        while ((m = envEndRegex.exec(body)) !== null) {
+            const env = m[1];
+            envStack[env] = (envStack[env] || 0) - 1;
+        }
+        // Append missing \end{} or prepend missing \begin{}
+        let envFixSuffix = '';
+        let envFixPrefix = '';
+        for (const [env, count] of Object.entries(envStack)) {
+            if (count > 0) {
+                envFixSuffix += `\\end{${env}}\n`.repeat(count);
+            } else if (count < 0) {
+                envFixPrefix += `\\begin{${env}}\n`.repeat(Math.abs(count));
+            }
+        }
+        body = envFixPrefix + body + envFixSuffix;
+
+        // 2d. Handle BibTeX commands — the texlive.net API doesn't run bibtex,
+        // so \bibliography{} and \bibliographystyle{} always error.
+        // We extract all \cite{} keys and build a thebibliography fallback.
+        const hasBibliography = /\\bibliography\{/.test(body) || /\\bibliography\{/.test(preamble);
+        const hasBibstyle = /\\bibliographystyle\{/.test(body) || /\\bibliographystyle\{/.test(preamble);
+
+        if (hasBibliography || hasBibstyle) {
+            // Collect all cite keys from \cite{key}, \cite{key1,key2}, \citep{}, \citet{}, etc.
+            const citeRegex = /\\cite[tp]?\{([^}]+)\}/g;
+            const citeKeys = new Set();
+            let citeMatch;
+            while ((citeMatch = citeRegex.exec(body)) !== null) {
+                citeMatch[1].split(',').forEach(k => citeKeys.add(k.trim()));
+            }
+
+            // Remove the \bibliography{} and \bibliographystyle{} lines
+            body = body.replace(/\\bibliographystyle\{[^}]*\}/g, '');
+            body = body.replace(/\\bibliography\{[^}]*\}/g, '');
+            preamble = preamble.replace(/\\bibliographystyle\{[^}]*\}/g, '');
+            preamble = preamble.replace(/\\bibliography\{[^}]*\}/g, '');
+
+            // Build a thebibliography block with placeholder entries
+            if (citeKeys.size > 0) {
+                let bibBlock = `\n\\begin{thebibliography}{${citeKeys.size}}\n`;
+                let idx = 1;
+                for (const key of citeKeys) {
+                    bibBlock += `\\bibitem{${key}} [${idx}] Reference: \\textit{${key.replace(/_/g, '\\_')}}.\n`;
+                    idx++;
+                }
+                bibBlock += `\\end{thebibliography}\n`;
+                body += bibBlock;
+            }
+        }
+
+        // ── Step 3: Force nonstopmode at the very top ──
+        // This tells pdflatex to never stop on errors; it just logs them and continues
+        const nonstopDirective = '\\nonstopmode\n';
+
+        // ── Step 4: Reassemble ──
+        return `${nonstopDirective}${preamble}\n${packagesToHoist}\n\\begin{document}\n${body}\n\\end{document}`;
     };
 
     const handleCompile = React.useCallback(() => {

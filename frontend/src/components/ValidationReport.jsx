@@ -32,7 +32,8 @@ export function ValidationReport() {
                     project.files?.forEach(file => {
                         if (file.validationReport && file.validationReport.length > 0) {
 
-                            const basename = file.originalName.replace(/\.[^.]+$/, '');
+                            const originalName = file.originalName || '';
+                            const basename = originalName.replace(/\.[^.]+$/, '');
                             const reconstructedFileName = `${basename}_reconstructed.md`;
                             const reconstructedFile = project.files.find(f => f.originalName === reconstructedFileName);
 
@@ -45,8 +46,8 @@ export function ValidationReport() {
                                 originalId: file._id,
                                 projectId: project._id,
                                 projectName: project.name,
-                                fileName: file.originalName,
-                                isDocx: file.originalName.toLowerCase().endsWith('.docx') || file.originalName.toLowerCase().endsWith('.doc'),
+                                fileName: originalName,
+                                isDocx: originalName.toLowerCase().endsWith('.docx') || originalName.toLowerCase().endsWith('.doc'),
                                 totalIssues,
                                 fixedIssues,
                                 errors: file.validationReport.slice(0, 3), // store top 3 to preview
@@ -196,10 +197,10 @@ export function ValidationReport() {
                                 </Badge>
                             </div>
 
-                            <p className="text-sm text-[var(--color-text-muted)] mb-3 bg-red-50/50 p-2 rounded-md border border-red-100">
+                            <p className="text-sm text-[var(--color-text-muted)] mb-3 bg-red-50/50 p-2 rounded-md border border-red-100 flex items-center gap-1.5 flex-wrap">
                                 <strong className="text-red-700">Identified Issues:</strong>
-                                {report.errors.map(err => err.description.split(': "')[1]?.replace('"', '')).join(', ')}
-                                {report.totalIssues > 3 ? ` and ${report.totalIssues - 3} more...` : ''}
+                                <span>{report.errors.map(err => err.description?.split(': "')[1]?.replace('"', '') || err.title || 'Unknown').filter(Boolean).join(', ')}</span>
+                                {report.totalIssues > 3 ? <span className="text-xs text-red-500 font-semibold uppercase tracking-widest leading-none ml-1">+{report.totalIssues - 3} MORE</span> : ''}
                             </p>
                             <div className="flex items-center justify-between mt-4 pt-4 border-t border-[var(--color-surface-200)]">
                                 <span className="text-sm font-medium text-[var(--color-surface-400)] text-gray-500 flex flex-col gap-0.5">

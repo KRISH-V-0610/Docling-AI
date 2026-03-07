@@ -9,10 +9,13 @@ import {
     Settings,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
     UserCircle,
     LogIn,
     FolderOpen,
-    LogOut
+    LogOut,
+    Bot,
+    PlusCircle
 } from 'lucide-react';
 import { cn } from './Button';
 import useAuthStore from '../store/useAuthStore';
@@ -24,6 +27,16 @@ export function Sidebar({ isOpen, toggleSidebar }) {
     const { projects, fetchAllProjects } = useProjectStore();
     const { isProcessing } = useAppStore();
 
+    const [expandedMenus, setExpandedMenus] = React.useState({ 'Advance Workshop': true });
+
+    const toggleMenu = (menuName, e) => {
+        e.preventDefault();
+        setExpandedMenus(prev => ({ ...prev, [menuName]: !prev[menuName] }));
+        if (!isOpen) {
+            toggleSidebar();
+        }
+    };
+
     React.useEffect(() => {
         if (isAuthenticated) {
             fetchAllProjects();
@@ -34,7 +47,15 @@ export function Sidebar({ isOpen, toggleSidebar }) {
         { name: 'Dashboard', path: '/dashboard', icon: FileText },
         { name: 'Projects History', path: '/history', icon: Upload },
         { name: 'Validation Report', path: '/reports', icon: CheckCircle },
-        { name: 'Settings', path: '/settings', icon: Settings },
+        {
+            name: 'Advance Workshop',
+            icon: Code2,
+            children: [
+                { name: 'DocBot', path: '/advance-workshop', icon: Bot },
+                { name: 'Other Features', path: '/advance-workshop/other', icon: PlusCircle },
+            ]
+        },
+        
     ];
 
     return (
@@ -63,6 +84,59 @@ export function Sidebar({ isOpen, toggleSidebar }) {
             <div className="flex flex-col gap-2 p-3 flex-1 overflow-y-auto w-full mt-4">
                 {navItems.map((item, idx) => {
                     const isDivider = item.name === 'Settings';
+                    const hasChildren = !!item.children;
+                    const isExpanded = expandedMenus[item.name];
+
+                    if (hasChildren) {
+                        return (
+                            <React.Fragment key={item.name}>
+                                <button
+                                    onClick={(e) => toggleMenu(item.name, e)}
+                                    className={cn(
+                                        "w-full flex items-center justify-between rounded-[var(--radius-md)] px-3 py-3 text-sm font-medium transition-all group overflow-hidden whitespace-nowrap",
+                                        "text-white/70 hover:bg-white/10 hover:text-white",
+                                        isProcessing && "pointer-events-none opacity-50 grayscale"
+                                    )}
+                                    title={!isOpen ? item.name : undefined}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <item.icon className="h-5 w-5 shrink-0 transition-colors" />
+                                        <span className={cn(
+                                            "transition-opacity duration-200",
+                                            isOpen ? "opacity-100" : "opacity-0 hidden"
+                                        )}>
+                                            {item.name}
+                                        </span>
+                                    </div>
+                                    <div className={cn("transition-opacity duration-200", isOpen ? "opacity-100" : "opacity-0 hidden")}>
+                                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                    </div>
+                                </button>
+                                {isExpanded && isOpen && (
+                                    <div className="flex flex-col gap-1 ml-4 mt-1 pl-3 border-l-2 border-white/10">
+                                        {item.children.map(child => (
+                                            <NavLink
+                                                key={child.path}
+                                                to={child.path}
+                                                end={child.path === '/advance-workshop'}
+                                                className={({ isActive }) => cn(
+                                                    "flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium transition-all group overflow-hidden whitespace-nowrap",
+                                                    isActive
+                                                        ? "bg-white/20 text-white font-bold"
+                                                        : "text-white/70 hover:bg-white/10 hover:text-white",
+                                                    isProcessing && "pointer-events-none opacity-50 grayscale"
+                                                )}
+                                                title={!isOpen ? child.name : undefined}
+                                            >
+                                                {child.icon && <child.icon className="h-4 w-4 shrink-0 transition-colors" />}
+                                                <span className="truncate">{child.name}</span>
+                                            </NavLink>
+                                        ))}
+                                    </div>
+                                )}
+                            </React.Fragment>
+                        );
+                    }
 
                     return (
                         <React.Fragment key={item.path}>
