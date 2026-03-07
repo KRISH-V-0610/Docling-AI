@@ -34,7 +34,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -363,29 +363,13 @@ async def reconstruct_stream_endpoint(
             return
             
         yield f"data: {{ \"log\": \"Running spellchecker...\" }}\n\n"
-        await asyncio.sleep(0.1)
         
         spell = SpellChecker()
         words = re.findall(r'\b[a-zA-Z]+\b', text)
-        yield f"data: {{ \"log\": \"Extracted {len(words)} words for spelling analysis.\" }}\n\n"
-        await asyncio.sleep(0.1)
-
         misspelled = list({word for word in spell.unknown(words) if len(word) > 2})
-        yield f"data: {{ \"log\": \"Identified {len(misspelled)} potentially misspelled words. Generating corrections...\" }}\n\n"
-        await asyncio.sleep(0.1)
+        corrections = {word: spell.correction(word) for word in misspelled}
         
-        corrections = {}
-        processed = 0
-        total_missed = len(misspelled)
-        
-        for word in misspelled:
-            corrections[word] = spell.correction(word)
-            processed += 1
-            if processed % max(1, total_missed // 5) == 0 or processed == total_missed:
-                yield f"data: {{ \"log\": \"Generated corrections for {processed}/{total_missed} words...\" }}\n\n"
-                await asyncio.sleep(0.1)
-        
-        yield f"data: {{ \"log\": \"Spell checking complete. Found {total_missed} spelling errors.\", \"errors\": {json.dumps(misspelled)}, \"corrections\": {json.dumps(corrections)} }}\n\n"
+        yield f"data: {{ \"log\": \"Found {len(misspelled)} spelling errors.\", \"errors\": {json.dumps(misspelled)}, \"corrections\": {json.dumps(corrections)} }}\n\n"
         
         yield f"data: {{ \"log\": \"Bifurcating text into conceptual chunks...\" }}\n\n"
         chunks = chunk_text(text, max_words=800)
@@ -485,4 +469,4 @@ def read_root():
     
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)

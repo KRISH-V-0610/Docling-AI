@@ -132,8 +132,10 @@ export const uploadProjectFile = async (req, res) => {
                 // Last ditch raw ASCII extraction for legacy .doc buffers to avoid completely empty states
                 extractedContent = buffer.toString('utf-8').replace(/[^\x20-\x7E\n]/g, '');
             }
+        } else if (lowerName.endsWith('.tex') || mimetype === 'application/x-tex') {
+            extractedContent = buffer.toString('utf-8');
         } else {
-            return res.status(400).json({ error: 'Unsupported file type. Please upload .txt, .md, .pdf, or .doc/.docx' });
+            return res.status(400).json({ error: 'Unsupported file type. Please upload .txt, .md, .pdf, .doc/.docx, or .tex' });
         }
 
         const newFile = {
