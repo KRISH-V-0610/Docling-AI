@@ -46,3 +46,12 @@ yarn-error.log*
 # Other
 .gemini/
 .agents/
+
+# SQLite databases (runtime data — not source code)
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploaded user documents and generated output (runtime data)
+backend_ai/data/documents_store/
+backend_ai/deepscan/output/

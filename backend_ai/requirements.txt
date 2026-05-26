@@ -1,0 +1,39 @@
+# Merged dependencies for all four Python services hosted by the unified
+# python-ai entrypoint:
+#   - backend-chatbot-spellCheck/ (Dockyyy + reconstruct pipeline)
+#   - backend-agent-pipeline/     (deep-scan / FormatForge)
+#   - backend-agent-fileEditor/   (DocBot DOCX editor)
+#   - backend-readme-generator-github/ (GitHub README generator)
+
+# ── Web framework ─────────────────────────────────────────────────────────
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.0
+starlette>=0.37
+python-dotenv>=1.0.0
+python-multipart>=0.0.9
+httpx>=0.27
+
+# ── File extraction ───────────────────────────────────────────────────────
+PyPDF2
+python-docx>=1.1.0
+pdfplumber>=0.11.0
+
+# ── Spell check ───────────────────────────────────────────────────────────
+pyspellchecker
+
+# ── Shared JWT verification (services/common/jwt_auth.py) ────────────────
+PyJWT>=2.8.0
+
+# ── Agno + Groq LLM stack ────────────────────────────────────────────────
+agno>=1.2.0
+agno[sqlite]
+groq>=0.8.0
+
+# ── MCP server (file-editor's --mcp flag) ────────────────────────────────
+mcp
+
+# ── Agno transitive deps not auto-pulled in some envs ────────────────────
+sqlalchemy
+aiosqlite
+ddgs                  # DuckDuckGo search (newer agno renamed from duckduckgo-search)

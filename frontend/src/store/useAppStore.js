@@ -17,7 +17,7 @@ const useAppStore = create((set) => ({
     setTargetStyle: (style) => set({ targetStyle: style }),
     customRules: '',
     setCustomRules: (rules) => set({ customRules: rules }),
-    llmEngine: 'meta-llama/llama-4-maverick-17b-128e-instruct',
+    llmEngine: 'openai/gpt-oss-120b',
     setLlmEngine: (engine) => set({ llmEngine: engine }),
 
     // Reconstruct context (project to write result back to)

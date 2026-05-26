@@ -154,7 +154,7 @@ curl -X POST http://localhost:8000/api/v2/ask \\
   -d '{"query": "Summarize the methodology section", "context": "..."}'
 
 # 3. Deep scan pipeline
-curl -X POST http://localhost:8090/api/v2/deep-scan/stream \\
+curl -X POST http://localhost:8000/deepscan/api/v2/pipeline/stream \\
   -F "file=@paper.docx" \\
   -F "format_style=apa7" \\
   --no-buffer`,
@@ -265,9 +265,9 @@ async function reconstructDocument(file, formatStyle = "ieee") {
           <div className="grid sm:grid-cols-2 gap-3 text-sm font-mono">
             {[
               { label: 'Reconstruct API', url: 'http://localhost:8000/api/v2' },
-              { label: 'Deep Scan Pipeline', url: 'http://localhost:8090/api/v2' },
+              { label: 'Deep Scan Pipeline', url: 'http://localhost:8000/deepscan/api/v2' },
               { label: 'DocBot / Chat API', url: 'http://localhost:8000/api/v2/' },
-              { label: 'README Generator API', url: 'http://localhost:9000/api/v1' },
+              { label: 'README Generator API', url: 'http://localhost:8000/readme/api/v1' },
             ].map(b => (
               <div key={b.url} className="flex flex-col gap-1 p-3 rounded-lg bg-[var(--color-surface-50)] border border-[var(--color-surface-200)]">
                 <span className="text-xs text-[var(--color-text-muted)] font-sans font-semibold">{b.label}</span>
@@ -334,7 +334,7 @@ async function reconstructDocument(file, formatStyle = "ieee") {
             method="POST"
             path="/api/v1/readme/auto/raw"
             desc="Auto-generate & download a LaTeX README for any GitHub repo"
-            badge={{ label: 'Port 9000', color: 'purple' }}
+            badge={{ label: '/readme', color: 'purple' }}
             request={`{
   "repo_url": "https://github.com/owner/repo",
   "user_consents": true,
@@ -348,7 +348,7 @@ async function reconstructDocument(file, formatStyle = "ieee") {
             method="POST"
             path="/api/v1/markdown/auto"
             desc="Generate a full Markdown README for a GitHub repository"
-            badge={{ label: 'Port 9000', color: 'purple' }}
+            badge={{ label: '/readme', color: 'purple' }}
             request={`{
   "repo_url": "https://github.com/owner/repo",
   "user_consents": true,
@@ -428,7 +428,7 @@ GITHUB_TOKEN=your_github_personal_access_token`} />
             <BookOpen className="w-4 h-4" /> Reconstruct API Docs
           </a>
           <a
-            href="http://localhost:9000/docs"
+            href="http://localhost:8000/readme/docs"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 text-[var(--color-primary-50)] border border-white/20 text-sm font-bold hover:bg-white/20 transition-colors"

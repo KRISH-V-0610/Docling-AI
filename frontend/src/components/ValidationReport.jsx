@@ -7,8 +7,9 @@ import { Badge } from './Badge';
 import { Tabs, TabsList, TabsTrigger } from './Tabs';
 import { useToast } from './Toasts';
 import { marked } from 'marked';
+import { ENDPOINTS } from '../config/api';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/projects';
+const API_URL = ENDPOINTS.projects;
 
 export function ValidationReport() {
     const { toast } = useToast();

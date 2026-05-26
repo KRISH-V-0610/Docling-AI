@@ -4,7 +4,7 @@
  * Upload → Configure → Process → LaTeX → Agent
  *
  * Self-contained: uses useDeepScanStore (isolated from main app store).
- * Backend: FormatForge pipeline on port 8090.
+ * Backend: unified backend_ai service (port 8000), /deepscan sub-router.
  */
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,8 +16,9 @@ import {
 import MonacoEditor from '@monaco-editor/react';
 import * as docx from 'docx-preview';
 import useDeepScanStore from '../store/useDeepScanStore';
+import { ENDPOINTS, authHeaders } from '../config/api';
 
-const PIPELINE_API = 'http://127.0.0.1:8090';
+const PIPELINE_API = ENDPOINTS.deepScan;
 
 const STYLES = [
   { id: 'ieee', label: 'IEEE' },
@@ -289,7 +290,7 @@ function ProcessStep() {
 
     let logCount = 0;
 
-    fetch(`${PIPELINE_API}/api/v2/pipeline/stream`, { method: 'POST', body: formData })
+    fetch(`${PIPELINE_API}/api/v2/pipeline/stream`, { method: 'POST', headers: authHeaders(), body: formData })
       .then(async (response) => {
         if (!response.body) throw new Error('ReadableStream not supported');
         const reader = response.body.getReader();
@@ -632,7 +633,7 @@ function AgentStep() {
 
     // Fetch the DOCX from backend and render it using docx-preview
     const fileUrl = `${PIPELINE_API}/api/v2/download/${encodeURIComponent(formattedFile)}`;
-    fetch(fileUrl)
+    fetch(fileUrl, { headers: authHeaders() })
       .then(res => {
         if (!res.ok) throw new Error('File download failed');
         return res.blob();

@@ -14,6 +14,7 @@ import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { marked } from 'marked';
 import useAppStore from '../store/useAppStore';
+import { ENDPOINTS } from '../config/api';
 
 // ── Format compliance rules per standard ──────────────────────────────────────
 const FORMAT_RULES = {
@@ -147,7 +148,7 @@ function computeFormatCompliance(plainText, htmlContent, formatStyle) {
 }
 
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/projects';
+const API_URL = ENDPOINTS.projects;
 
 // ── Quill toolbar config ─────────────────────────────────────────────────────
 const FULL_TOOLBAR = [

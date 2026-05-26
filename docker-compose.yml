@@ -1,0 +1,81 @@
+# =============================================================================
+# HackaMineD / Docling AI — dev orchestration
+# =============================================================================
+# Two backend processes total:  
+#   - backend       (Node/Express, port 3000) — auth, projects, files, LaTeX
+#   - backend_ai    (Python/FastAPI, port 8000) — chatbot + reconstruct +
+#                   deepscan + file-editor + readme-gen (one app, four routers)
+#
+# Boot everything:
+#     docker compose up --build
+#
+# Frontend (Vite) runs locally for HMR — `cd frontend && npm run dev`.
+#
+# Notes:
+#  * Runtime pip-install keeps the repo edit-friendly. Production Dockerfiles
+#    can come later.
+#  * Persistent SQLite/data lives bind-mounted under backend_ai/data/.
+#  * Required secrets read from a repo-root .env file (see .env.example).
+# =============================================================================
+
+services:
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm start"
+    environment:
+      PORT: 3000
+      MONGO_URI: mongodb://mongo:27017/hackamined
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+    volumes:
+      - ./backend:/app
+      - express-node-modules:/app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  backend_ai:
+    image: python:3.11-slim
+    working_dir: /repo
+    command: sh -c "pip install --no-cache-dir -r backend_ai/requirements.txt && python -m backend_ai.main"
+    environment:
+      BACKEND_AI_HOST: 0.0.0.0
+      BACKEND_AI_PORT: 8000
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LATEX_MODEL: ${LATEX_MODEL:-openai/gpt-oss-120b}
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      LLM_MODEL: ${LLM_MODEL:-llama-3.3-70b-versatile}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      REQUIRE_AUTH: ${REQUIRE_AUTH:-false}
+      # backend_ai/main.py pins these to backend_ai/data/* automatically.
+    volumes:
+      - ./:/repo
+      - backend-ai-pip:/root/.cache/pip
+    ports:
+      - "8000:8000"
+
+volumes:
+  mongo-data:
+  express-node-modules:
+  backend-ai-pip:

@@ -18,7 +18,7 @@ const useDeepScanStore = create((set) => ({
   // ── Config ──
   targetStyle: "ieee",
   setTargetStyle: (style) => set({ targetStyle: style }),
-  llmModel: "meta-llama/llama-4-maverick-17b-128e-instruct",
+  llmModel: "openai/gpt-oss-120b",
   setLlmModel: (model) => set({ llmModel: model }),
 
   // ── Processing results ──
@@ -57,7 +57,7 @@ const useDeepScanStore = create((set) => ({
       currentStep: 1,
       uploadedFile: null,
       targetStyle: "ieee",
-      llmModel: "meta-llama/llama-4-maverick-17b-128e-instruct",
+      llmModel: "openai/gpt-oss-120b",
       processLogs: [],
       processingProgress: 0,
       currentStage: 0,

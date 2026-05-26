@@ -173,8 +173,8 @@ export function Sidebar({ isOpen, toggleSidebar }) {
 
             {/* ── Recent Projects ──────────────────── */}
             {isOpen && (
-                <div className="px-3 pb-3">
-                    <div className="border-t border-white/20 pt-3">
+                <div className="px-3 pb-3 font-light">
+                    <div className="pt-3">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 px-1 mb-2">
                             Recent Projects
                         </p>

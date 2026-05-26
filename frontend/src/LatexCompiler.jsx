@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import "./LatexCompiler.css";
+import { ENDPOINTS } from "./config/api";
 
 const defaultLatex = `\\documentclass{article}
 \\usepackage{amsmath}
@@ -83,7 +84,7 @@ const LatexCompiler = () => {
             setPdfUrl("");
         }
 
-        const response = await fetch("http://localhost:3000/api/compile", {
+        const response = await fetch(ENDPOINTS.latexCompile, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

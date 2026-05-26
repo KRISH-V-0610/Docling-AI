@@ -4,8 +4,9 @@ import useAppStore from '../store/useAppStore';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Send } from 'lucide-react';
+import { ENDPOINTS, authHeaders } from '../config/api';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v2';
+const API_URL = ENDPOINTS.chatbot;
 
 const ChatBot = () => {
     const [isHovered, setIsHovered] = useState(false);
@@ -51,7 +52,7 @@ const ChatBot = () => {
         try {
             const res = await fetch(`${API_URL}/ask`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({
                     query: userText,
                     context: chatContext || undefined

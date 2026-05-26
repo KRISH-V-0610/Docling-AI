@@ -1,0 +1,156 @@
+"""
+HackaMineD — Unified Python Backend
+====================================
+
+One FastAPI app on one port (8000) hosts every Python-side service:
+
+    Chatbot + Reconstruct   (root):   /api/v2/ask, /api/v2/reconstruct/stream
+    Deep-Scan / FormatForge (/deepscan): /deepscan/api/v2/pipeline/stream, etc.
+    File-Editor / DocBot    (/files):    /files/documents/..., /files/chat
+    README Generator        (/readme):   /readme/api/v1/..., GET /readme/
+
+Each domain lives in its own sub-package under backend-ai/ (chatbot/,
+deepscan/, file_editor/, readme_gen/) and exposes an APIRouter.
+
+Pair this with the Express backend (port 3000) — the only two backend
+processes in the system.
+
+Run:
+    pip install -r backend-ai/requirements.txt
+    python -m backend-ai.main           # or: uvicorn backend-ai.main:app --reload
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.requests import Request
+
+# Load .env from the backend-ai folder (consolidates the four legacy .env files).
+HERE = Path(__file__).resolve().parent
+load_dotenv(HERE / ".env")
+
+# Default DB + data paths so the sub-routers don't write to a stray cwd.
+os.environ.setdefault("DOCKYYY_DB_PATH",         str(HERE / "data" / "dockyyy.db"))
+os.environ.setdefault("AGENT_SESSIONS_DB_PATH",  str(HERE / "data" / "agent_sessions.db"))
+os.environ.setdefault("DOCUMENTS_DIR",           str(HERE / "data" / "documents_store"))
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("backend-ai")
+
+# --------------------------------------------------------------------------
+# Sub-routers + cross-cutting middleware
+# --------------------------------------------------------------------------
+from .chatbot import router as chatbot_router
+from .deepscan import router as deepscan_router
+from .file_editor import router as file_editor_router
+from .readme_gen import (
+    router as readme_gen_router,
+    SecurityMiddleware,
+    startup_banner,
+    shutdown_cleanup,
+)
+from .common import JWTAuthMiddleware, DEFAULT_PUBLIC_PATHS
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("HackaMineD backend-ai starting")
+    await startup_banner()
+    yield
+    logger.info("HackaMineD backend-ai shutting down")
+    await shutdown_cleanup()
+
+
+app = FastAPI(
+    title="HackaMineD — Unified Python Backend",
+    description="Chatbot, reconstruct pipeline, deep-scan, file-editor, and README generator on one port.",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# --------------------------------------------------------------------------
+# Middleware stack (order matters — added last runs first)
+# --------------------------------------------------------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*", "Authorization", "X-Session-Token"],
+)
+app.add_middleware(SecurityMiddleware)  # X-Frame-Options, no-cache, etc.
+app.add_middleware(
+    JWTAuthMiddleware,
+    public_paths=DEFAULT_PUBLIC_PATHS + (
+        # Deep-scan public paths
+        "/deepscan/api/health",
+        "/deepscan/api/v2/health",
+        "/deepscan/docs",
+        "/deepscan/redoc",
+        "/deepscan/openapi.json",
+        # File-editor public paths
+        "/files/health",
+        "/files/docs",
+        "/files/redoc",
+        "/files/openapi.json",
+        # README-gen public paths (UI + status pages)
+        "/readme",
+        "/readme/info",
+        "/readme/health",
+        "/readme/ai-status",
+        "/readme/rate-limit-status",
+        "/readme/docs",
+        "/readme/redoc",
+        "/readme/openapi.json",
+    ),
+)
+
+
+# --------------------------------------------------------------------------
+# Unified exception handler
+# --------------------------------------------------------------------------
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
+# --------------------------------------------------------------------------
+# Service health
+# --------------------------------------------------------------------------
+@app.get("/healthz")
+def healthz():
+    return {
+        "status": "ok",
+        "service": "backend-ai",
+        "mounts": {
+            "chatbot":     "(root) — /api/v2/ask, /api/v2/reconstruct/stream",
+            "deepscan":    "/deepscan",
+            "file_editor": "/files",
+            "readme_gen":  "/readme",
+        },
+    }
+
+
+# --------------------------------------------------------------------------
+# Mount the four sub-routers
+# --------------------------------------------------------------------------
+app.include_router(chatbot_router)
+app.include_router(deepscan_router, prefix="/deepscan")
+app.include_router(file_editor_router, prefix="/files")
+app.include_router(readme_gen_router, prefix="/readme")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    host = os.getenv("BACKEND_AI_HOST", "127.0.0.1")
+    port = int(os.getenv("BACKEND_AI_PORT", "8000"))
+    uvicorn.run(app, host=host, port=port, reload=False)

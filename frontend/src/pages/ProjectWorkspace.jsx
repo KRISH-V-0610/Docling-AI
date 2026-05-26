@@ -12,8 +12,9 @@ import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import MDEditor from '@uiw/react-md-editor';
 import MonacoEditor from '@monaco-editor/react';
+import { ENDPOINTS } from '../config/api';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/projects';
+const API_URL = ENDPOINTS.projects;
 
 export function ProjectWorkspace() {
 
@@ -457,7 +458,7 @@ const compileLatex = useCallback(async () => {
     setLatexCompiled(false);
 
     try {
-        const response = await fetch("http://localhost:3000/api/latex-api/compile", {
+        const response = await fetch(ENDPOINTS.latexCompile, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -923,7 +924,7 @@ const compileLatex = useCallback(async () => {
                                         value={llmEngine}
                                         onChange={(e) => setLlmEngine(e.target.value)}
                                     >
-                                        <option value="meta-llama/llama-4-maverick-17b-128e-instruct">LLaMA-4-Maverick 17b</option>
+                                        <option value="openai/gpt-oss-120b">LLaMA-4-Maverick 17b</option>
                                         <option value="qwen/qwen3-32b">Qwen-3 32b</option>
                                     </select>
                                 </div> */}

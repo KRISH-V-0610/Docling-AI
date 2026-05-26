@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import axios from 'axios';
+import { ENDPOINTS } from '../config/api';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/auth';
+const API_URL = ENDPOINTS.auth;
 
 const useAuthStore = create((set, get) => ({
     user: null,

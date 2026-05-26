@@ -6,8 +6,9 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import axios from 'axios';
+import { ENDPOINTS } from '../config/api';
 
-const API_BASE = "http://localhost:8080";
+const API_BASE = ENDPOINTS.fileEditor;
 
 /* ─── Helpers ──────────────────────────────────────────── */
 function formatBytes(bytes) {
@@ -174,8 +175,7 @@ export function AdvanceWorkspace() {
                 template: latexTemplate,
             };
 
-            // Using the README generator API running on port 9000
-            const res = await axios.post(`http://localhost:9000/api/v1/readme/auto/raw`, payload, {
+            const res = await axios.post(`${ENDPOINTS.readmeGen}/api/v1/readme/auto/raw`, payload, {
                 responseType: 'text'
             });
 
@@ -199,7 +199,7 @@ export function AdvanceWorkspace() {
                     ? err.response.data.detail
                     : JSON.stringify(err.response.data.detail);
             }
-            alert(`Error generating README: ${detail}\nMake sure the README generator backend is running on port 9000.`);
+            alert(`Error generating README: ${detail}\nMake sure the README generator backend is reachable at ${ENDPOINTS.readmeGen}.`);
         } finally {
             setGeneratingReadme(false);
         }

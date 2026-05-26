@@ -1,8 +1,0 @@
-fastapi
-uvicorn
-python-dotenv
-PyPDF2
-python-docx
-pyspellchecker
-agno
-groq

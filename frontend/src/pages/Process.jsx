@@ -7,9 +7,10 @@ import { Progress } from '../components/Progress';
 import { StepProgress } from '../components/StepProgress';
 import { Button } from '../components/Button';
 import useAppStore from '../store/useAppStore';
+import { ENDPOINTS, authHeaders } from '../config/api';
 
 const steps = ["Upload", "Analyze", "Configure", "Process"];
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/projects';
+const API_URL = ENDPOINTS.projects;
 
 export function Process() {
     const navigate = useNavigate();
@@ -70,8 +71,9 @@ export function Process() {
             formData.append('model', llmEngine);
 
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/v2/reconstruct/stream', {
+                const response = await fetch(`${ENDPOINTS.chatbot}/reconstruct/stream`, {
                     method: 'POST',
+                    headers: authHeaders(),
                     body: formData
                 });
 
