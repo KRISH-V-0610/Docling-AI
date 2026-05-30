@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     FileText, Upload, Download, RefreshCw, Send, Loader2,
-    Bot, Trash2, AlertTriangle, MessageSquare, Sparkles,
-    RotateCcw, ChevronRight, File, Github
+    Bot, Trash2, AlertTriangle, MessageSquare,
+    RotateCcw, ChevronRight, File
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import axios from 'axios';
@@ -37,12 +37,6 @@ export function AdvanceWorkspace() {
     const [selectedFile, setSelectedFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [deleting, setDeleting] = useState(null);
-
-    const [leftTab, setLeftTab] = useState('chat'); // 'chat' or 'other'
-
-    const [githubUrl, setGithubUrl] = useState('');
-    const [latexTemplate, setLatexTemplate] = useState('article');
-    const [generatingReadme, setGeneratingReadme] = useState(false);
 
     const [chatInput, setChatInput] = useState('');
     const [chatHistory, setChatHistory] = useState(() => {
@@ -155,56 +149,6 @@ export function AdvanceWorkspace() {
         }
     };
 
-    /* ── Generate README ── */
-    const handleGenerateReadme = async () => {
-        if (!githubUrl) {
-            alert('Please enter a GitHub repository URL.');
-            return;
-        }
-        if (!/^https?:\/\/github\.com\/[\w\-\.]+\/[\w\-\.]+\/?$/.test(githubUrl.replace(/\/$/, ''))) {
-            alert('Invalid GitHub URL. Must be: https://github.com/owner/repository');
-            return;
-        }
-
-        setGeneratingReadme(true);
-        try {
-            const payload = {
-                repo_url: githubUrl,
-                user_consents: true,
-                analysis_depth: 'standard',
-                template: latexTemplate,
-            };
-
-            const res = await axios.post(`${ENDPOINTS.readmeGen}/api/v1/readme/auto/raw`, payload, {
-                responseType: 'text'
-            });
-
-            // Trigger download of the resulting .tex file
-            const repoName = githubUrl.split('/').filter(Boolean).pop() || 'repo';
-            const blob = new Blob([res.data], { type: 'application/x-tex' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `README_${repoName}.tex`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            setGithubUrl('');
-        } catch (err) {
-            let detail = err.message;
-            if (err.response?.data?.detail) {
-                detail = typeof err.response.data.detail === 'string'
-                    ? err.response.data.detail
-                    : JSON.stringify(err.response.data.detail);
-            }
-            alert(`Error generating README: ${detail}\nMake sure the README generator backend is reachable at ${ENDPOINTS.readmeGen}.`);
-        } finally {
-            setGeneratingReadme(false);
-        }
-    };
-
     /* ── Clear Chat ── */
     const handleClearChat = () => {
         setChatHistory([{
@@ -265,153 +209,91 @@ export function AdvanceWorkspace() {
     return (
         <div className="flex h-[calc(100vh-120px)] rounded-2xl overflow-hidden border border-[var(--color-surface-200)] shadow-lg bg-white">
 
-            {/* ── LEFT PANEL: Tabs ── */}
+            {/* ── LEFT PANEL: DocBot ── */}
+            {/* ── LEFT PANEL: DocBot ── */}
             <div className="w-[320px] shrink-0 flex flex-col border-r border-[var(--color-surface-200)] bg-white min-h-0">
-                {/* Tabs Header */}
-                <div className="flex border-b border-[var(--color-surface-200)] bg-[var(--color-surface-50)] shrink-0">
+                {/* Chat Header */}
+                <div className="px-4 py-2.5 flex items-center justify-between bg-gradient-to-r from-[var(--color-primary-600)] to-[var(--color-primary-500)] text-white shrink-0">
+                    <h3 className="text-[11px] font-medium opacity-90 flex items-center gap-2 tracking-wide uppercase">
+                        <Bot className="w-4 h-4" /> DocBot AI Assistant
+                    </h3>
                     <button
-                        onClick={() => setLeftTab('chat')}
-                        className={`flex-1 py-3 text-[11px] font-bold uppercase tracking-wide flex justify-center items-center gap-1.5 transition-colors ${leftTab === 'chat' ? 'bg-white text-[var(--color-primary-600)] border-b-2 border-[var(--color-primary-600)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-surface-100)]'}`}
+                        onClick={handleClearChat}
+                        className="text-[10px] font-medium flex items-center gap-1 px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 transition-colors"
+                        title="Clear chat"
                     >
-                        <Bot className="w-4 h-4" /> DocBot AI
-                    </button>
-                    <button
-                        onClick={() => setLeftTab('other')}
-                        className={`flex-1 py-3 text-[11px] font-bold uppercase tracking-wide flex justify-center items-center gap-1.5 transition-colors ${leftTab === 'other' ? 'bg-white text-[var(--color-primary-600)] border-b-2 border-[var(--color-primary-600)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-surface-100)]'}`}
-                    >
-                        <Sparkles className="w-4 h-4" /> Other Features
+                        <RotateCcw className="w-3 h-3" />
+                        Clear
                     </button>
                 </div>
 
-                {leftTab === 'chat' && (
-                    <>
-                        {/* Chat Header */}
-                        <div className="px-4 py-2.5 flex items-center justify-between bg-gradient-to-r from-[var(--color-primary-600)] to-[var(--color-primary-500)] text-white shrink-0">
-                            <h3 className="text-[11px] font-medium opacity-90 flex items-center gap-2 tracking-wide uppercase">
-                                AI Assistant
-                            </h3>
-                            <button
-                                onClick={handleClearChat}
-                                className="text-[10px] font-medium flex items-center gap-1 px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 transition-colors"
-                                title="Clear chat"
-                            >
-                                <RotateCcw className="w-3 h-3" />
-                                Clear
-                            </button>
-                        </div>
-
-                        {/* Messages */}
-                        <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4 bg-gradient-to-b from-[var(--color-surface-50)] to-white min-h-0">
-                            {chatHistory.map(msg => {
-                                const isUser = msg.role === 'user';
-                                return (
-                                    <div key={msg.id} className={`flex gap-2.5 max-w-[95%] ${isUser ? 'self-end flex-row-reverse' : 'self-start'}`}>
-                                        {/* Avatar */}
-                                        <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5 shadow-sm ${isUser
-                                            ? 'bg-[var(--color-primary-100)] text-[var(--color-primary-600)]'
-                                            : 'bg-slate-100 text-slate-600'
-                                            }`}>
-                                            {isUser
-                                                ? <ChevronRight className="w-4 h-4" />
-                                                : <Bot className="w-4 h-4" />
-                                            }
-                                        </div>
-                                        {/* Bubble */}
-                                        <div className="flex flex-col">
-                                            <div className={`px-4 py-2.5 text-[13px] leading-relaxed shadow-sm ${isUser
-                                                ? 'bg-[var(--color-primary-600)] text-white rounded-2xl rounded-tr-md'
-                                                : 'bg-white border border-[var(--color-surface-200)] text-[var(--color-text-main)] rounded-2xl rounded-tl-md'
-                                                }`}>
-                                                {msg.textHtml
-                                                    ? <div dangerouslySetInnerHTML={{ __html: msg.textHtml }} />
-                                                    : msg.text
-                                                }
-                                            </div>
-                                            <span className={`text-[10px] text-[var(--color-text-muted)] mt-1 ${isUser ? 'text-right' : ''} px-1`}>{msg.time}</span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                            {isSending && (
-                                <div className="flex gap-2.5 self-start max-w-[95%]">
-                                    <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 text-slate-600 mt-0.5 shadow-sm">
-                                        <Bot className="w-4 h-4" />
-                                    </div>
-                                    <div className="px-4 py-3 bg-white border border-[var(--color-surface-200)] rounded-2xl rounded-tl-md shadow-sm flex items-center gap-1.5">
-                                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                                    </div>
+                {/* Messages */}
+                <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4 bg-gradient-to-b from-[var(--color-surface-50)] to-white min-h-0">
+                    {chatHistory.map(msg => {
+                        const isUser = msg.role === 'user';
+                        return (
+                            <div key={msg.id} className={`flex gap-2.5 max-w-[95%] ${isUser ? 'self-end flex-row-reverse' : 'self-start'}`}>
+                                {/* Avatar */}
+                                <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5 shadow-sm ${isUser
+                                    ? 'bg-[var(--color-primary-100)] text-[var(--color-primary-600)]'
+                                    : 'bg-slate-100 text-slate-600'
+                                    }`}>
+                                    {isUser
+                                        ? <ChevronRight className="w-4 h-4" />
+                                        : <Bot className="w-4 h-4" />
+                                    }
                                 </div>
-                            )}
+                                {/* Bubble */}
+                                <div className="flex flex-col">
+                                    <div className={`px-4 py-2.5 text-[13px] leading-relaxed shadow-sm ${isUser
+                                        ? 'bg-[var(--color-primary-600)] text-white rounded-2xl rounded-tr-md'
+                                        : 'bg-white border border-[var(--color-surface-200)] text-[var(--color-text-main)] rounded-2xl rounded-tl-md'
+                                        }`}>
+                                        {msg.textHtml
+                                            ? <div dangerouslySetInnerHTML={{ __html: msg.textHtml }} />
+                                            : msg.text
+                                        }
+                                    </div>
+                                    <span className={`text-[10px] text-[var(--color-text-muted)] mt-1 ${isUser ? 'text-right' : ''} px-1`}>{msg.time}</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {isSending && (
+                        <div className="flex gap-2.5 self-start max-w-[95%]">
+                            <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 text-slate-600 mt-0.5 shadow-sm">
+                                <Bot className="w-4 h-4" />
+                            </div>
+                            <div className="px-4 py-3 bg-white border border-[var(--color-surface-200)] rounded-2xl rounded-tl-md shadow-sm flex items-center gap-1.5">
+                                <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </div>
                         </div>
+                    )}
+                </div>
 
-                        {/* Input */}
-                        <div className="px-4 py-3 bg-white border-t border-[var(--color-surface-200)] shrink-0">
-                            <div className="flex gap-2 items-center">
-                                <input
-                                    type="text"
-                                    value={chatInput}
-                                    onChange={e => setChatInput(e.target.value)}
-                                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                                    placeholder={selectedFile ? `Edit ${selectedFile}…` : 'Select a file first…'}
-                                    disabled={!selectedFile || isSending}
-                                    className="flex-1 px-4 py-2 text-[13px] bg-[var(--color-surface-50)] border border-[var(--color-surface-200)] rounded-xl outline-none focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-400)] transition-all disabled:opacity-50"
-                                />
-                                <button
-                                    onClick={handleSendMessage}
-                                    disabled={!chatInput.trim() || !selectedFile || isSending}
-                                    className="shrink-0 w-10 h-10 rounded-xl bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-500)] disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors shadow-sm"
-                                >
-                                    {isSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                                </button>
-                            </div>
-                        </div>
-                    </>
-                )}
-
-                {leftTab === 'other' && (
-                    <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-gradient-to-b from-[var(--color-surface-50)] to-white min-h-0 text-[var(--color-text-main)]">
-                        {/* Generate from GitHub */}
-                        <div className="bg-white rounded-xl p-4 border border-[var(--color-surface-200)] shadow-sm">
-                            <div className="flex items-center gap-2 mb-3 text-xs font-bold text-[var(--color-text-main)] uppercase tracking-wide">
-                                <Github className="w-4 h-4 opacity-70" />
-                                Generate from GitHub
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="https://github.com/owner/repo"
-                                value={githubUrl}
-                                onChange={(e) => setGithubUrl(e.target.value)}
-                                disabled={generatingReadme}
-                                className="w-full text-xs px-3 py-2 border border-[var(--color-surface-200)] rounded-lg mb-3 outline-none focus:border-[var(--color-primary-400)] focus:ring-1 focus:ring-[var(--color-primary-400)] bg-[var(--color-surface-50)] disabled:opacity-60"
-                            />
-                            <div className="flex flex-col gap-2">
-                                <select
-                                    value={latexTemplate}
-                                    onChange={(e) => setLatexTemplate(e.target.value)}
-                                    disabled={generatingReadme}
-                                    className="w-full text-xs px-3 py-2 border border-[var(--color-surface-200)] rounded-lg outline-none bg-[var(--color-surface-50)] cursor-pointer hover:bg-[var(--color-surface-100)] disabled:opacity-60"
-                                >
-                                    <option value="article">Article</option>
-                                    <option value="ieee">IEEE</option>
-                                    <option value="acm">ACM</option>
-                                    <option value="minimal">Minimal</option>
-                                    <option value="tech_report">Tech Report</option>
-                                    <option value="elegant">Elegant</option>
-                                </select>
-                                <button
-                                    onClick={handleGenerateReadme}
-                                    disabled={generatingReadme || !githubUrl}
-                                    className="w-full px-3 py-2.5 mt-1 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-500)] text-white rounded-lg text-xs font-bold flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                                >
-                                    {generatingReadme ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                                    <span className="ml-2">Generate .tex File</span>
-                                </button>
-                            </div>
-                        </div>
+                {/* Input */}
+                <div className="px-4 py-3 bg-white border-t border-[var(--color-surface-200)] shrink-0">
+                    <div className="flex gap-2 items-center">
+                        <input
+                            type="text"
+                            value={chatInput}
+                            onChange={e => setChatInput(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                            placeholder={selectedFile ? `Edit ${selectedFile}…` : 'Select a file first…'}
+                            disabled={!selectedFile || isSending}
+                            className="flex-1 px-4 py-2 text-[13px] bg-[var(--color-surface-50)] border border-[var(--color-surface-200)] rounded-xl outline-none focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-400)] transition-all disabled:opacity-50"
+                        />
+                        <button
+                            onClick={handleSendMessage}
+                            disabled={!chatInput.trim() || !selectedFile || isSending}
+                            className="shrink-0 w-10 h-10 rounded-xl bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-500)] disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors shadow-sm"
+                        >
+                            {isSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                        </button>
                     </div>
-                )}
+                </div>
             </div>
 
             {/* ── CENTER PANEL: Live Preview ── */}

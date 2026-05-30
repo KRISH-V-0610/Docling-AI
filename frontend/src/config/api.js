@@ -25,14 +25,12 @@ export const ENDPOINTS = {
   latexCompile: `${API.EXPRESS}/api/latex-api/compile`,
 
   // Python AI unified service mounts:
-  //   /api/v2/ask, /api/v2/reconstruct/stream  → chatbot + reconstruct
-  //   /deepscan/api/v2/pipeline/stream         → deep-scan
-  //   /files/...                               → DOCX editor agent
-  //   /readme/...                              → GitHub README generator
+  //   /api/v2/ask                       → Dockyyy chatbot
+  //   /deepscan/api/v2/pipeline/stream  → deep-scan (core document→LaTeX engine)
+  //   /files/...                        → DocBot DOCX editor agent
   chatbot:      `${API.PYTHON_AI}/api/v2`,
   deepScan:     `${API.PYTHON_AI}/deepscan`,
   fileEditor:   `${API.PYTHON_AI}/files`,
-  readmeGen:    `${API.PYTHON_AI}/readme`,
 };
 
 // =====================================================================

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Code2, Copy, Check, ExternalLink, Zap, BookOpen,
-  FileText, Bot, Cpu, Layers, ChevronDown, ChevronUp
+  Bot, Layers, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 /* ── tiny helpers ───────────────────────────────────────── */
@@ -116,19 +116,15 @@ export function Integrations() {
   const snippets = {
     python: `import requests
 
-API_BASE = "http://localhost:8000/api/v2"
+API_BASE = "http://localhost:8000/deepscan/api/v2"
 
-# Format & reconstruct a manuscript
+# Format a manuscript with the Deep Scan pipeline (streaming SSE)
 with open("manuscript.docx", "rb") as f:
     response = requests.post(
-        f"{API_BASE}/reconstruct/stream",
+        f"{API_BASE}/pipeline/stream",
         files={"file": f},
-        data={
-            "format_style": "ieee",
-            "custom_rules": "",
-            "model": "gemini-2.0-flash"
-        },
-        stream=True
+        data={"style": "ieee"},
+        stream=True,
     )
 
 for line in response.iter_lines():
@@ -138,36 +134,32 @@ for line in response.iter_lines():
         if payload.get("log"):
             print(payload["log"])
         if payload.get("is_final"):
-            print("LaTeX:", payload["latex"][:200])
-            print("Markdown:", payload["markdown"][:200])`,
+            print("LaTeX:", payload["latex"][:200])`,
 
-    curl: `# 1. Upload & reconstruct a manuscript (streamipcng)
-curl -X POST http://localhost:8000/api/v2/reconstruct/stream \\
+    curl: `# 1. Deep Scan formatting pipeline (streaming)
+curl -X POST http://localhost:8000/deepscan/api/v2/pipeline/stream \\
   -F "file=@manuscript.docx" \\
-  -F "format_style=ieee" \\
-  -F "model=gemini-2.0-flash" \\
+  -F "style=ieee" \\
   --no-buffer
 
-# 2. Ask the document chatbot
+# 2. Ask the Dockyyy research assistant
 curl -X POST http://localhost:8000/api/v2/ask \\
   -H "Content-Type: application/json" \\
-  -d '{"query": "Summarize the methodology section", "context": "..."}'
+  -d '{"query": "Which conferences does Docling support?"}'
 
-# 3. Deep scan pipeline
-curl -X POST http://localhost:8000/deepscan/api/v2/pipeline/stream \\
-  -F "file=@paper.docx" \\
-  -F "format_style=apa7" \\
-  --no-buffer`,
+# 3. DocBot natural-language document editing
+curl -X POST http://localhost:8000/files/chat \\
+  -H "Content-Type: application/json" \\
+  -d '{"message": "Make the abstract more concise", "session_id": "abc"}'`,
 
-    js: `const API_BASE = "http://localhost:8000/api/v2";
+    js: `const API_BASE = "http://localhost:8000/deepscan/api/v2";
 
-async function reconstructDocument(file, formatStyle = "ieee") {
+async function formatDocument(file, style = "ieee") {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("format_style", formatStyle);
-  formData.append("model", "gemini-2.0-flash");
+  formData.append("style", style);
 
-  const response = await fetch(\`\${API_BASE}/reconstruct/stream\`, {
+  const response = await fetch(\`\${API_BASE}/pipeline/stream\`, {
     method: "POST",
     body: formData,
   });
@@ -220,11 +212,10 @@ async function reconstructDocument(file, formatStyle = "ieee") {
       </div>
 
       {/* ── Feature cards ─────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <FeatureCard icon={Cpu} title="Reconstruct" desc="Convert DOCX manuscripts into journal-ready LaTeX and Markdown with AI agents." />
-        <FeatureCard icon={Bot} title="DocBot" desc="Conversational Q&A on your uploaded documents using RAG-based retrieval." />
-        <FeatureCard icon={Layers} title="Deep Scan" desc="6-stage AI pipeline for full document analysis, compliance scoring, and formatting." />
-        <FeatureCard icon={FileText} title="README Gen" desc="Auto-generate LaTeX & Markdown READMEs from any public GitHub repository." />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <FeatureCard icon={Layers} title="Deep Scan" desc="Multi-agent pipeline that reformats a manuscript to a journal style and emits compilable LaTeX, preserving the original content." />
+        <FeatureCard icon={Bot} title="DocBot" desc="Natural-language DOCX editor — describe a change and the agent applies it to your document." />
+        <FeatureCard icon={Code2} title="Dockyyy" desc="Research assistant chatbot that guides you through formatting, tools, and conference requirements." />
       </div>
 
       {/* ── Quick start code ──────────────────────────────── */}
@@ -256,7 +247,7 @@ async function reconstructDocument(file, formatStyle = "ieee") {
       <section className="space-y-6">
         <div>
           <h2 className="text-2xl font-anton font-normal tracking-wide text-[var(--color-text-main)]">API Reference</h2>
-          <p className="text-sm text-[var(--color-text-muted)] mt-1">All endpoints are served from the local FastAPI backends. Base URLs shown below.</p>
+          <p className="text-sm text-[var(--color-text-muted)] mt-1">All AI endpoints are served from the unified FastAPI backend on port 8000.</p>
         </div>
 
         {/* Base URLs */}
@@ -264,10 +255,10 @@ async function reconstructDocument(file, formatStyle = "ieee") {
           <h3 className="font-semibold text-[var(--color-text-main)] text-sm uppercase tracking-wide">Base URLs</h3>
           <div className="grid sm:grid-cols-2 gap-3 text-sm font-mono">
             {[
-              { label: 'Reconstruct API', url: 'http://localhost:8000/api/v2' },
               { label: 'Deep Scan Pipeline', url: 'http://localhost:8000/deepscan/api/v2' },
-              { label: 'DocBot / Chat API', url: 'http://localhost:8000/api/v2/' },
-              { label: 'README Generator API', url: 'http://localhost:8000/readme/api/v1' },
+              { label: 'Dockyyy Chatbot', url: 'http://localhost:8000/api/v2' },
+              { label: 'DocBot Editor', url: 'http://localhost:8000/files' },
+              { label: 'Express API (auth/projects)', url: 'http://localhost:3000/api' },
             ].map(b => (
               <div key={b.url} className="flex flex-col gap-1 p-3 rounded-lg bg-[var(--color-surface-50)] border border-[var(--color-surface-200)]">
                 <span className="text-xs text-[var(--color-text-muted)] font-sans font-semibold">{b.label}</span>
@@ -281,31 +272,23 @@ async function reconstructDocument(file, formatStyle = "ieee") {
         <div className="space-y-4">
           <EndpointCard
             method="POST"
-            path="/api/v2/reconstruct/stream"
+            path="/deepscan/api/v2/pipeline/stream"
             desc="Format a manuscript — returns a streaming SSE event stream"
             badge={{ label: 'SSE Stream', color: 'blue' }}
             request={`// multipart/form-data
 {
   "file": "<your .docx file>",
-  "format_style": "ieee | apa7 | mla | chicago | vancouver",
-  "custom_rules": "optional extra instructions",
-  "model": "gemini-2.0-flash"
+  "style": "ieee | apa7 | mla | chicago | vancouver"
 }`}
-            response={`// Each SSE event has this shape:
-{ "log": "Agent 1: Formatting title page..." }
-{ "log": "Agent 6: LaTeX generation complete" }
-// Final event:
-{
-  "is_final": true,
-  "latex": "\\\\documentclass{article}...",
-  "markdown": "# Title\\n\\n..."
-}`}
+            response={`// Events: agent progress, compliance score, formatted file + LaTeX
+{ "stage": 1, "log": "Inspecting document structure..." }
+{ "is_final": true, "compliance_score": 0.87, "formatted_file": "output.docx", "latex": "\\\\documentclass{article}..." }`}
           />
 
           <EndpointCard
             method="POST"
             path="/api/v2/ask"
-            desc="Conversational chatbot for uploaded documents"
+            desc="Dockyyy research-assistant chatbot"
             request={`{
   "query": "What is the abstract of this paper?",
   "context": "optional document text to anchor the query"
@@ -317,46 +300,15 @@ async function reconstructDocument(file, formatStyle = "ieee") {
 
           <EndpointCard
             method="POST"
-            path="/api/v2/deep-scan/stream"
-            desc="6-agent deep scan pipeline — compliance + full formatting"
-            badge={{ label: 'SSE Stream', color: 'blue' }}
-            request={`// multipart/form-data
-{
-  "file": "<your .docx file>",
-  "format_style": "ieee"
-}`}
-            response={`// Events: agent progress, compliance score, formatted file path
-{ "stage": "agent", "agent": 1, "log": "Inspecting document structure..." }
-{ "is_final": true, "compliance_score": 0.87, "formatted_file": "output.docx", "latex": "..." }`}
-          />
-
-          <EndpointCard
-            method="POST"
-            path="/api/v1/readme/auto/raw"
-            desc="Auto-generate & download a LaTeX README for any GitHub repo"
-            badge={{ label: '/readme', color: 'purple' }}
+            path="/files/chat"
+            desc="DocBot natural-language document editing"
             request={`{
-  "repo_url": "https://github.com/owner/repo",
-  "user_consents": true,
-  "analysis_depth": "standard",
-  "template": "article | ieee | acm | minimal | tech_report | elegant"
-}`}
-            response={`// Returns raw .tex file content as text/plain`}
-          />
-
-          <EndpointCard
-            method="POST"
-            path="/api/v1/markdown/auto"
-            desc="Generate a full Markdown README for a GitHub repository"
-            badge={{ label: '/readme', color: 'purple' }}
-            request={`{
-  "repo_url": "https://github.com/owner/repo",
-  "user_consents": true,
-  "analysis_depth": "standard"
+  "message": "Make the abstract more concise",
+  "session_id": "uuid",
+  "user_id": "local_ui_user"
 }`}
             response={`{
-  "readme": "# My Repo\\n\\n...",
-  "sections": ["Overview", "Features", "Installation", ...]
+  "response": "Done — I shortened the abstract to 180 words."
 }`}
           />
         </div>
@@ -368,16 +320,19 @@ async function reconstructDocument(file, formatStyle = "ieee") {
           <Code2 className="w-5 h-5 text-[var(--color-primary-600)]" /> Authentication
         </h2>
         <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">
-          The local APIs currently do not require an API key — they are designed for local research and development use.
-          For production deployments, configure your <code className="bg-[var(--color-surface-100)] px-1.5 py-0.5 rounded text-xs font-mono">.env</code> files with appropriate LLM keys:
+          The SPA signs in via the Express backend, which issues a JWT. The same token is verified by the Python AI backend
+          (shared <code className="bg-[var(--color-surface-100)] px-1.5 py-0.5 rounded text-xs font-mono">JWT_SECRET_KEY</code>).
+          Configure your <code className="bg-[var(--color-surface-100)] px-1.5 py-0.5 rounded text-xs font-mono">.env</code> files with the required keys:
         </p>
-        <CodeBlock lang=".env" code={`# Python/api.py and AgentCode/api.py
-GEMINI_API_KEY=your_google_gemini_key
+        <CodeBlock lang=".env" code={`# backend_ai/.env
 GROQ_API_KEY=your_groq_key
+JWT_SECRET_KEY=must_match_express
+LATEX_MODEL=openai/gpt-oss-120b
 
-# readme_github
-GROQ_API_KEY=your_groq_key
-GITHUB_TOKEN=your_github_personal_access_token`} />
+# backend/.env
+JWT_SECRET_KEY=must_match_python
+MONGO_URI=mongodb://localhost:27017/hackamined
+CLOUDINARY_CLOUD_NAME=...`} />
       </section>
 
       {/* ── FAQ ───────────────────────────────────────────── */}
@@ -387,24 +342,24 @@ GITHUB_TOKEN=your_github_personal_access_token`} />
           <Accordion title="Which format styles are supported?">
             <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">
               <strong>IEEE</strong>, <strong>APA 7</strong>, <strong>MLA</strong>, <strong>Chicago</strong>, and <strong>Vancouver</strong>.
-              Pass one of these as the <code className="bg-[var(--color-surface-100)] px-1 rounded text-xs font-mono">format_style</code> field.
+              Pass one of these as the <code className="bg-[var(--color-surface-100)] px-1 rounded text-xs font-mono">style</code> field.
             </p>
           </Accordion>
           <Accordion title="Can I run Docling on my own server?">
             <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">
-              Yes — all backends are FastAPI apps. Serve them behind nginx or any reverse proxy.
+              Yes — the backend is a FastAPI app and the API server is Express. Serve them behind nginx or any reverse proxy.
               Remember to set appropriate CORS origins in production.
             </p>
           </Accordion>
           <Accordion title="What file formats are supported for upload?">
             <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">
               <code className="bg-[var(--color-surface-100)] px-1 rounded text-xs font-mono">.docx</code> files are the primary supported format.
-              PDF support is planned for a future release.
+              PDF support is being expanded.
             </p>
           </Accordion>
           <Accordion title="How does the streaming SSE work?">
             <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">
-              The reconstruct and deep scan endpoints return <strong>Server-Sent Events (SSE)</strong>.
+              The Deep Scan pipeline returns <strong>Server-Sent Events (SSE)</strong>.
               Each event is a JSON object with a <code className="bg-[var(--color-surface-100)] px-1 rounded text-xs font-mono">log</code> field.
               The final event has <code className="bg-[var(--color-surface-100)] px-1 rounded text-xs font-mono">is_final: true</code> and contains the full output.
             </p>
@@ -416,7 +371,7 @@ GITHUB_TOKEN=your_github_personal_access_token`} />
       <div className="rounded-2xl border border-[var(--color-surface-300)] bg-[var(--color-primary-600)] p-8 text-[var(--color-primary-50)] text-center space-y-4">
         <h2 className="text-3xl font-anton font-normal tracking-wide">Ready to integrate?</h2>
         <p className="opacity-80 max-w-xl mx-auto text-sm leading-relaxed">
-          Start with the Quick Start snippets above, or spin up the local API servers and explore the interactive Swagger docs.
+          Start with the Quick Start snippets above, or spin up the local API server and explore the interactive Swagger docs.
         </p>
         <div className="flex justify-center gap-4 flex-wrap pt-2">
           <a
@@ -425,15 +380,15 @@ GITHUB_TOKEN=your_github_personal_access_token`} />
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--color-surface-100)] text-[var(--color-text-main)] text-sm font-bold hover:bg-white transition-colors shadow-md"
           >
-            <BookOpen className="w-4 h-4" /> Reconstruct API Docs
+            <BookOpen className="w-4 h-4" /> API Docs (Swagger)
           </a>
           <a
-            href="http://localhost:8000/readme/docs"
+            href="http://localhost:8000/deepscan/docs"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 text-[var(--color-primary-50)] border border-white/20 text-sm font-bold hover:bg-white/20 transition-colors"
           >
-            <ExternalLink className="w-4 h-4" /> README API Docs
+            <ExternalLink className="w-4 h-4" /> Deep Scan Docs
           </a>
         </div>
       </div>

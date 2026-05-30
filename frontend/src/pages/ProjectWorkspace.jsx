@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { FileText, UploadCloud, FileType2, Loader2, Save, Plus, ChevronLeft, Trash2, Edit2, Check, X, Code2, Wand2, Microscope, Settings, Play, FileDown, ListOrdered, ChevronDown, ChevronRight, ImagePlus } from 'lucide-react';
+import { FileText, UploadCloud, FileType2, Loader2, Save, Plus, ChevronLeft, Trash2, Edit2, Check, X, Code2, Microscope, Settings, Play, FileDown, ListOrdered, ChevronDown, ChevronRight, ImagePlus } from 'lucide-react';
 import { Button, cn } from '../components/Button';
 import { useToast } from '../components/Toasts';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -40,12 +40,9 @@ export function ProjectWorkspace() {
 
     const { renameProject, deleteProject, recordVisit } = useProjectStore();
     const { toast, confirm } = useToast();
-    const { latexContent, setLatexContent, targetStyle, setTargetStyle, customRules, setCustomRules, llmEngine, setLlmEngine, setUploadedFile, setReconstructProjectId, setReconstructSourceFileName, setDeepScanProjectId, setDeepScanSourceFileName } = useAppStore();
+    const { latexContent, setLatexContent, targetStyle, setTargetStyle, customRules, setCustomRules, llmEngine, setLlmEngine, setDeepScanProjectId, setDeepScanSourceFileName } = useAppStore();
     const fileInputRef = useRef(null);
     const saveTimeoutRef = useRef(null);
-
-    // Reconstruct modal state
-    const [showReconstructModal, setShowReconstructModal] = useState(false);
 
     // LaTeX editor state
     const latexEditorRef = useRef(null);
@@ -54,14 +51,6 @@ export function ProjectWorkspace() {
     const [latexCompiled, setLatexCompiled] = useState(false);
     const [latexAssets, setLatexAssets] = useState([]);
     const [latexOutline, setLatexOutline] = useState([]);
-
-    // Reconstruct modal state
-    const [reconstructToggles, setReconstructToggles] = useState({
-        autoFixCitations: true,
-        reorderReferences: true,
-        normalizeHeadings: true,
-        applySpacing: true,
-    });
 
     const fetchProject = async () => {
         try {
@@ -425,29 +414,11 @@ ${trimmed}
         e.target.value = '';
     };
 
-    const handleReconstructStart = () => {
-        if (!activeFile) {
-            toast({ title: 'No file selected', description: 'Please select a file to reconstruct.', variant: 'error' });
-            return;
-        }
-
-        // Convert the stored text/HTML content to a plain-text File object
-        // so Process.jsx can POST it to the Python API
-        const content = activeFile.content || '';
-        // Strip HTML tags if rich-text (Quill) content
-        const plainText = content.replace(/<[^>]*>/g, '\n').replace(/&nbsp;/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
-
-        const blob = new Blob([plainText], { type: 'text/plain' });
-        // Use .tex extension — the API only accepts .pdf / .docx / .tex
-        // tex extractor simply does UTF-8 decode, so plain text works fine
-        const fileName = activeFile.originalName.replace(/\.[^.]+$/, '') + '.tex';
-        const reconstructFile = new File([blob], fileName, { type: 'text/plain' });
-
-        setUploadedFile(reconstructFile);
-        setReconstructProjectId(id);
-        setReconstructSourceFileName(activeFile.originalName.replace(/\.[^.]+$/, ''));
-        setShowReconstructModal(false);
-        navigate('/process');
+    // Format this document via the Deep Scan engine (the single document→LaTeX flow).
+    const handleFormatInDeepScan = () => {
+        setDeepScanProjectId(id);
+        setDeepScanSourceFileName(activeFile?.originalName?.replace(/\.[^.]+$/, '') || '');
+        navigate('/deep-scan');
     };
 
     // ---------------------------------
@@ -671,21 +642,13 @@ const compileLatex = useCallback(async () => {
                                     </Button>
                                 )}
                                 <button
-                                    onClick={() => setShowReconstructModal(true)}
+                                    onClick={handleFormatInDeepScan}
                                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-900)] rounded-lg shadow-sm transition-colors"
-                                    title="Configure and reconstruct this document"
-                                >
-                                    <Wand2 className="w-3.5 h-3.5" />
-                                    Reconstruct
-                                </button>
-                                {/* <button
-                                    onClick={handleDeepScanStart}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-lg shadow-sm transition-all"
-                                    title="Deep Scan: regex formatting + LLM LaTeX generation"
+                                    title="Format this document with the Deep Scan engine"
                                 >
                                     <Microscope className="w-3.5 h-3.5" />
-                                    Deep Scan
-                                </button> */}
+                                    Format (Deep Scan)
+                                </button>
                             </div>
                             <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-text-muted)]">
                                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4 text-green-600" /> Saved</>}
@@ -860,117 +823,6 @@ const compileLatex = useCallback(async () => {
                 )}
             </div>
 
-            {/* ===== Reconstruct Modal ===== */}
-            {showReconstructModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="bg-white rounded-[var(--radius-xl)] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-                    >
-                        {/* Modal Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-surface-200)]">
-                            <div>
-                                <h2 className="text-xl font-bold text-[var(--color-text-main)] flex items-center gap-2">
-                                    <Wand2 className="w-5 h-5 text-[var(--color-primary-500)]" /> Configure Reconstruction
-                                </h2>
-                                <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
-                                    Select style, engine and formatting options for <span className="font-semibold">{activeFile?.originalName}</span>
-                                </p>
-                            </div>
-                            <button onClick={() => setShowReconstructModal(false)} className="p-2 hover:bg-[var(--color-surface-100)] rounded-lg transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Target Configuration */}
-                            <div className="bg-[var(--color-surface-50)] rounded-[var(--radius-lg)] p-5 border border-[var(--color-surface-200)]">
-                                <h3 className="text-sm font-bold mb-4 flex items-center gap-2 text-[var(--color-text-main)]">
-                                    <Settings className="h-4 w-4 text-[var(--color-primary-500)]" /> Target Configuration
-                                </h3>
-
-                                <div className="mb-4">
-                                    <label className="block text-xs font-semibold text-[var(--color-text-main)] mb-2">Target Style</label>
-                                    <div className="grid grid-cols-2 gap-1.5">
-                                        {['IEEE', 'Vancouver', 'APA', 'MLA', 'Chicago'].map(style => (
-                                            <button
-                                                key={style}
-                                                onClick={() => setTargetStyle(style)}
-                                                className={`flex items-center justify-between p-2.5 rounded-[var(--radius-md)] border text-xs font-medium transition-colors ${targetStyle === style ? 'border-[var(--color-primary-500)] bg-[var(--color-primary-50)] text-[var(--color-primary-600)]' : 'border-[var(--color-surface-300)] bg-white text-[var(--color-text-main)] hover:bg-[var(--color-surface-50)]'}`}
-                                            >
-                                                {style} {targetStyle === style && <Check className="h-3.5 w-3.5" />}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="mb-4">
-                                    <label className="block text-xs font-semibold text-[var(--color-text-main)] mb-2">Custom Rules (Optional)</label>
-                                    <textarea
-                                        rows="3"
-                                        placeholder="E.g., Force author-date format for all references."
-                                        className="w-full rounded-[var(--radius-md)] border border-[var(--color-surface-300)] bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)] focus:border-transparent resize-none"
-                                        value={customRules}
-                                        onChange={(e) => setCustomRules(e.target.value)}
-                                    />
-                                </div>
-                                {/* 
-                                <div>
-                                    <label className="block text-xs font-semibold text-[var(--color-text-main)] mb-2">LLM Engine</label>
-                                    <select
-                                        className="w-full rounded-[var(--radius-md)] border border-[var(--color-surface-300)] bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)] focus:border-transparent"
-                                        value={llmEngine}
-                                        onChange={(e) => setLlmEngine(e.target.value)}
-                                    >
-                                        <option value="openai/gpt-oss-120b">LLaMA-4-Maverick 17b</option>
-                                        <option value="qwen/qwen3-32b">Qwen-3 32b</option>
-                                    </select>
-                                </div> */}
-                            </div>
-
-                            {/* Processing Options */}
-                            <div className="bg-[var(--color-surface-50)] rounded-[var(--radius-lg)] p-5 border border-[var(--color-surface-200)]">
-                                <h3 className="text-sm font-bold mb-4 flex items-center gap-2 text-[var(--color-text-main)]">
-                                    <Check className="h-4 w-4 text-[var(--color-primary-500)]" /> Processing Options
-                                </h3>
-                                <div className="space-y-4">
-                                    {[
-                                        { key: 'autoFixCitations', label: 'Auto fix citations' },
-                                        { key: 'reorderReferences', label: 'Reorder references' },
-                                        { key: 'normalizeHeadings', label: 'Normalize headings' },
-                                        { key: 'applySpacing', label: 'Apply spacing and margins' },
-                                    ].map(({ key, label }) => (
-                                        <div key={key} className="flex items-center justify-between">
-                                            <span className="text-xs font-medium text-[var(--color-text-main)]">{label}</span>
-                                            <button
-                                                type="button"
-                                                onClick={() => setReconstructToggles(p => ({ ...p, [key]: !p[key] }))}
-                                                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${reconstructToggles[key] ? 'bg-[var(--color-primary-600)]' : 'bg-gray-200'}`}
-                                                role="switch"
-                                                aria-checked={reconstructToggles[key]}
-                                            >
-                                                <span aria-hidden="true" className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${reconstructToggles[key] ? 'translate-x-4' : 'translate-x-0'}`} />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div className="flex justify-end gap-3 px-6 py-4 border-t border-[var(--color-surface-200)] bg-[var(--color-surface-50)] rounded-b-[var(--radius-xl)]">
-                            <button onClick={() => setShowReconstructModal(false)} className="px-4 py-2 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface-200)] rounded-lg transition-colors">
-                                Cancel
-                            </button>
-                            <Button onClick={handleReconstructStart} className="bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-900)] text-white shadow-sm">
-                                <Wand2 className="w-4 h-4 mr-2" /> Start Processing
-                            </Button>
-                        </div>
-                    </motion.div>
-                </div>
-            )}
         </div>
     );
 }

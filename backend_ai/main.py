@@ -51,22 +51,14 @@ logger = logging.getLogger("backend-ai")
 from .chatbot import router as chatbot_router
 from .deepscan import router as deepscan_router
 from .file_editor import router as file_editor_router
-from .readme_gen import (
-    router as readme_gen_router,
-    SecurityMiddleware,
-    startup_banner,
-    shutdown_cleanup,
-)
 from .common import JWTAuthMiddleware, DEFAULT_PUBLIC_PATHS
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("HackaMineD backend-ai starting")
-    await startup_banner()
     yield
     logger.info("HackaMineD backend-ai shutting down")
-    await shutdown_cleanup()
 
 
 app = FastAPI(
@@ -86,7 +78,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*", "Authorization", "X-Session-Token"],
 )
-app.add_middleware(SecurityMiddleware)  # X-Frame-Options, no-cache, etc.
 app.add_middleware(
     JWTAuthMiddleware,
     public_paths=DEFAULT_PUBLIC_PATHS + (
@@ -101,15 +92,6 @@ app.add_middleware(
         "/files/docs",
         "/files/redoc",
         "/files/openapi.json",
-        # README-gen public paths (UI + status pages)
-        "/readme",
-        "/readme/info",
-        "/readme/health",
-        "/readme/ai-status",
-        "/readme/rate-limit-status",
-        "/readme/docs",
-        "/readme/redoc",
-        "/readme/openapi.json",
     ),
 )
 
@@ -132,10 +114,9 @@ def healthz():
         "status": "ok",
         "service": "backend-ai",
         "mounts": {
-            "chatbot":     "(root) — /api/v2/ask, /api/v2/reconstruct/stream",
+            "chatbot":     "(root) — /api/v2/ask",
             "deepscan":    "/deepscan",
             "file_editor": "/files",
-            "readme_gen":  "/readme",
         },
     }
 
@@ -146,7 +127,6 @@ def healthz():
 app.include_router(chatbot_router)
 app.include_router(deepscan_router, prefix="/deepscan")
 app.include_router(file_editor_router, prefix="/files")
-app.include_router(readme_gen_router, prefix="/readme")
 
 
 if __name__ == "__main__":

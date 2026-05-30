@@ -51,7 +51,6 @@ export function Sidebar({ isOpen, toggleSidebar }) {
     const navItems = [
         { name: 'Dashboard', path: '/dashboard', icon: FileText },
         { name: 'Projects History', path: '/history', icon: Upload },
-        { name: 'Validation Report', path: '/reports', icon: CheckCircle },
         {
             name: 'Advance Workshop',
             icon: Code2,

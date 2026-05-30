@@ -12,9 +12,6 @@ import { Profile } from './pages/Profile';
 import { Landing } from './pages/Landing';
 import { History } from './pages/History';
 import { ProjectWorkspace } from './pages/ProjectWorkspace';
-import { Process } from './pages/Process';
-import { ValidationArea } from './pages/ValidationArea';
-import { ValidationReport } from './components/ValidationReport';
 import { AdvanceWorkspace } from './pages/AdvanceWorkspace';
 import { DeepScan } from './pages/DeepScan';
 import { Integrations } from './pages/Integrations';
@@ -95,17 +92,14 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AuthenticatedLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/reports" element={<ValidationReport />} />
             <Route path="/settings" element={<PlaceholderPage title="Settings" />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/history" element={<History />} />
             <Route path="/project/:id" element={<ProjectWorkspace />} />
-            <Route path="/process" element={<Process />} />
             <Route path="/deep-scan" element={<DeepScan />} />
             <Route path="/advance-workshop" element={<AdvanceWorkspace />} />
             <Route path="/integrations" element={<Integrations />} />
             <Route path="/workflows" element={<Workflows />} />
-            <Route path="/validation/:projectId/:originalId/:reconstructedId" element={<ValidationArea />} />
           </Route>
         </Route>
 
