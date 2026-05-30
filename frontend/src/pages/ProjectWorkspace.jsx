@@ -12,7 +12,7 @@ import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import MDEditor from '@uiw/react-md-editor';
 import MonacoEditor from '@monaco-editor/react';
-import { ENDPOINTS } from '../config/api';
+import { ENDPOINTS, authHeaders } from '../config/api';
 
 const API_URL = ENDPOINTS.projects;
 
@@ -46,7 +46,6 @@ export function ProjectWorkspace() {
 
     // LaTeX editor state
     const latexEditorRef = useRef(null);
-    const latexFormRef = useRef(null);
     const [latexCompiling, setLatexCompiling] = useState(false);
     const [latexCompiled, setLatexCompiled] = useState(false);
     const [latexAssets, setLatexAssets] = useState([]);
@@ -390,22 +389,6 @@ ${trimmed}
 \\end{document}`;
 }, []);
 
-    const handleLatexCompile = useCallback(() => {
-        if (!latexFormRef.current) return;
-        setLatexCompiling(true);
-        const form = latexFormRef.current;
-        form.querySelectorAll('.dynamic-asset').forEach(el => el.remove());
-        const hiddenInput = form.querySelector('input[name="filecontents[]"]');
-        if (hiddenInput) hiddenInput.value = sanitizeLatex(localContent);
-        latexAssets.forEach((file) => {
-            const nameInput = document.createElement('input'); nameInput.type = 'hidden'; nameInput.name = 'filename[]'; nameInput.value = file.name; nameInput.className = 'dynamic-asset'; form.appendChild(nameInput);
-            const fileInput = document.createElement('input'); fileInput.type = 'file'; fileInput.name = 'filecontents[]'; fileInput.className = 'dynamic-asset';
-            const dataTransfer = new DataTransfer(); dataTransfer.items.add(file); fileInput.files = dataTransfer.files; form.appendChild(fileInput);
-        });
-        form.submit();
-        setTimeout(() => { setLatexCompiling(false); setLatexCompiled(true); }, 1500);
-    }, [localContent, latexAssets, sanitizeLatex]);
-
     const handleLatexAssetUpload = (e) => {
         if (e.target.files && e.target.files.length > 0) {
             const newFiles = Array.from(e.target.files);
@@ -429,13 +412,12 @@ const compileLatex = useCallback(async () => {
     setLatexCompiled(false);
 
     try {
-        const response = await fetch(ENDPOINTS.latexCompile, {
+        const response = await fetch(ENDPOINTS.deepScanCompile, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
+            headers: authHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({
                 latex: sanitizeLatex(localContent),
+                job: null,
             }),
         });
 
@@ -743,14 +725,6 @@ const compileLatex = useCallback(async () => {
                                             </div>
                                         </div>
                                     </div>
-
-                                    {/* Hidden compile form */}
-                                    <form action="https://texlive.net/cgi-bin/latexcgi" method="POST" encType="multipart/form-data" target="latex-pdf-preview-ws" className="hidden" ref={latexFormRef}>
-                                        <input type="hidden" name="filecontents[]" value={localContent} />
-                                        <input type="hidden" name="filename[]" value={activeFile.originalName} />
-                                        <input type="hidden" name="engine" value="pdflatex" />
-                                        <input type="hidden" name="return" value="pdf" />
-                                    </form>
                                 </div>
                             ) : activeFile.originalName.endsWith('.md') ? (
                                 // Markdown Split Editor

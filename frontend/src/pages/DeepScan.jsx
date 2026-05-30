@@ -256,6 +256,7 @@ function ProcessStep() {
     currentStage, setCurrentStage,
     isProcessingDone, setIsProcessingDone,
     setFormattedFile, setComplianceScore, setLatexContent,
+    setAssets, setIntegrityReport,
     setStep,
   } = useDeepScanStore();
 
@@ -322,9 +323,12 @@ function ProcessStep() {
               if (payload.stage_complete === 1) setProcessingProgress(60);
               if (payload.compliance_score != null) setComplianceScore(payload.compliance_score);
               if (payload.formatted_file) setFormattedFile(payload.formatted_file);
+              if (payload.integrity) setIntegrityReport(payload.integrity);
               if (payload.is_final) {
                 if (payload.latex) setLatexContent(payload.latex);
                 if (payload.formatted_file) setFormattedFile(payload.formatted_file);
+                if (payload.integrity) setIntegrityReport(payload.integrity);
+                if (payload.assets) setAssets(payload.assets, payload.assets_base, payload.job);
                 setProcessingProgress(100);
                 setIsProcessingDone(true);
                 return;
@@ -422,11 +426,48 @@ function ProcessStep() {
 // ═══════════════════════════════════════════════════════════
 //  Step 4 — LaTeX Editor
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+//  Content-integrity banner (Phase C — no-data-loss check)
+// ═══════════════════════════════════════════════════════════
+function IntegrityBanner({ report }) {
+  if (!report) return null;
+  const sev = report.severity || 'info';
+  const cfg = {
+    info: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800', icon: Check, label: 'Content preserved' },
+    warning: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-800', icon: AlertTriangle, label: 'Review recommended' },
+    error: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', icon: AlertTriangle, label: 'Possible content loss' },
+  }[sev] || {};
+  const Icon = cfg.icon || Check;
+  const pct = (v) => `${Math.round((v ?? 0) * 100)}%`;
+
+  return (
+    <div className={`mx-6 mt-3 rounded-lg border ${cfg.border} ${cfg.bg} px-4 py-3`}>
+      <div className={`flex items-center gap-2 text-sm font-semibold ${cfg.text}`}>
+        <Icon className="w-4 h-4 shrink-0" />
+        Content Integrity: {cfg.label}
+        <span className="ml-auto font-normal text-xs opacity-80">
+          words {report.word_count_out}/{report.word_count_in} ({pct(report.word_retention_ratio)})
+          {' · '}figures {report.figure_count_out}/{report.figure_count_in}
+          {report.table_count_in > 0 && <>{' · '}tables {report.table_count_out}/{report.table_count_in}</>}
+          {' · '}similarity {pct(report.token_similarity)}
+        </span>
+      </div>
+      {Array.isArray(report.notes) && report.notes.length > 0 && (
+        <ul className={`mt-1.5 ml-6 list-disc text-xs ${cfg.text} opacity-90 space-y-0.5`}>
+          {report.notes.map((n, i) => <li key={i}>{n}</li>)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function LaTeXStep() {
-  const { latexContent, setLatexContent, setStep } = useDeepScanStore();
+  const { latexContent, setLatexContent, setStep, integrityReport, jobId } = useDeepScanStore();
   const [compiling, setCompiling] = useState(false);
   const [outline, setOutline] = useState([]);
-  const latexFormRef = useRef(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const [compileError, setCompileError] = useState(null);
+  const [compileNotes, setCompileNotes] = useState([]);
 
   useEffect(() => {
     if (!latexContent) return;
@@ -439,78 +480,51 @@ function LaTeXStep() {
     setOutline(items);
   }, [latexContent]);
 
-  const compilePdf = () => {
-    if (!latexFormRef.current) return;
+  // Compile path (Phase D): local tectonic only — figure assets + server-side
+  // auto-correct. No external/texlive.net fallback by design; on failure the
+  // error is surfaced so it can be fixed.
+  const compilePdf = async () => {
     setCompiling(true);
-    const form = latexFormRef.current;
-
-    const sanitizeLatex = (code) => {
-      const beginDocRegex = /\\begin\{document\}/;
-      const firstBeginIndex = code.search(beginDocRegex);
-      let preamble = ""; let restOfCode = code;
-      if (firstBeginIndex !== -1) { preamble = code.substring(0, firstBeginIndex); restOfCode = code.substring(firstBeginIndex); }
-      else { return `\\nonstopmode\n\\documentclass{article}\n\\begin{document}\n${code}\n\\end{document}`; }
-      let hasDocClass = false;
-      preamble = preamble.split('\n').filter(line => {
-        if (line.trim().startsWith('\\documentclass')) { if (hasDocClass) return false; hasDocClass = true; return true; } return true;
-      }).join('\n');
-      if (!hasDocClass) preamble = '\\documentclass{article}\n' + preamble;
-      let body = restOfCode.replace(/\\begin\{document\}/g, '').replace(/\\end\{document\}/g, '').replace(/\\documentclass(\[.*?\])?\{.*?\}/g, '');
-      const packageRegex = /\\(usepackage|usetikzlibrary)(\[.*?\])?\{.*?\}/g;
-      let packagesToHoist = "";
-      let pkgMatch;
-      while ((pkgMatch = packageRegex.exec(body)) !== null) { packagesToHoist += pkgMatch[0] + "\n"; }
-      body = body.replace(packageRegex, '');
-
-      body = body.replace(/\\includegraphics(\[.*?\])?\{([^}]*)\}/g, (match, opts, filename) => {
-        const cleaned = filename.trim();
-        return cleaned !== filename ? `\\includegraphics${opts || ''}{${cleaned}}` : match;
+    setCompileError(null);
+    setCompileNotes([]);
+    try {
+      const res = await fetch(ENDPOINTS.deepScanCompile, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ latex: latexContent, job: jobId || null }),
       });
-      let braceDepth = 0;
-      for (const ch of body) { if (ch === '{') braceDepth++; else if (ch === '}') braceDepth--; }
-      if (braceDepth > 0) body += '}'.repeat(braceDepth);
-      const envBeginRegex = /\\begin\{([^}]+)\}/g;
-      const envEndRegex = /\\end\{([^}]+)\}/g;
-      const envStack = {};
-      let m;
-      while ((m = envBeginRegex.exec(body)) !== null) { envStack[m[1]] = (envStack[m[1]] || 0) + 1; }
-      while ((m = envEndRegex.exec(body)) !== null) { envStack[m[1]] = (envStack[m[1]] || 0) - 1; }
-      let envFixSuffix = '', envFixPrefix = '';
-      for (const [env, count] of Object.entries(envStack)) {
-        if (count > 0) envFixSuffix += `\\end{${env}}\n`.repeat(count);
-        else if (count < 0) envFixPrefix += `\\begin{${env}}\n`.repeat(Math.abs(count));
+
+      const ctype = res.headers.get('content-type') || '';
+
+      if (res.ok && ctype.includes('application/pdf')) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        setPdfUrl((old) => { if (old) URL.revokeObjectURL(old); return url; });
+        try {
+          const notes = JSON.parse(res.headers.get('X-Latex-Notes') || '[]');
+          if (Array.isArray(notes)) setCompileNotes(notes);
+        } catch { /* ignore */ }
+        setCompiling(false);
+        return;
       }
-      body = envFixPrefix + body + envFixSuffix;
 
-      const hasBib = /\\bibliography\{/.test(body) || /\\bibliography\{/.test(preamble);
-      const hasBibStyle = /\\bibliographystyle\{/.test(body) || /\\bibliographystyle\{/.test(preamble);
-      if (hasBib || hasBibStyle) {
-        const citeRegex = /\\cite[tp]?\{([^}]+)\}/g;
-        const citeKeys = new Set();
-        let citeMatch;
-        while ((citeMatch = citeRegex.exec(body)) !== null) { citeMatch[1].split(',').forEach(k => citeKeys.add(k.trim())); }
-        body = body.replace(/\\bibliographystyle\{[^}]*\}/g, '').replace(/\\bibliography\{[^}]*\}/g, '');
-        preamble = preamble.replace(/\\bibliographystyle\{[^}]*\}/g, '').replace(/\\bibliography\{[^}]*\}/g, '');
-        if (citeKeys.size > 0) {
-          let bibBlock = `\n\\begin{thebibliography}{${citeKeys.size}}\n`;
-          let idx = 1;
-          for (const key of citeKeys) { bibBlock += `\\bibitem{${key}} [${idx}] Reference: \\textit{${key.replace(/_/g, '\\_')}}.\n`; idx++; }
-          bibBlock += `\\end{thebibliography}\n`;
-          body += bibBlock;
-        }
+      const data = await res.json().catch(() => ({}));
+      if (Array.isArray(data.notes)) setCompileNotes(data.notes);
+
+      if (res.status === 503 && data.tectonic_available === false) {
+        setCompileError(
+          data.message ||
+          'LaTeX engine (tectonic) is not available on the server. ' +
+          'Start the backend via Docker so tectonic is present.'
+        );
+      } else {
+        setCompileError(data.log || data.message || 'Compilation failed.');
       }
-      return `\\nonstopmode\n${preamble}\n${packagesToHoist}\n\\begin{document}\n${body}\n\\end{document}`;
-    };
-
-    const hiddenInput = form.querySelector('input[name="filecontents[]"]');
-    if (hiddenInput) {
-      hiddenInput.value = sanitizeLatex(latexContent);
-    }
-
-    form.submit();
-    setTimeout(() => {
       setCompiling(false);
-    }, 1500); // Give it some time to start loading in iframe
+    } catch (err) {
+      setCompileError(`Could not reach the compile service: ${err.message}`);
+      setCompiling(false);
+    }
   };
 
   const editorRef = useRef(null);
@@ -543,6 +557,8 @@ function LaTeXStep() {
           )}
         </button>
       </div>
+
+      <IntegrityBanner report={integrityReport} />
 
       <div className="flex flex-1 min-h-0">
         {/* Outline Sidebar */}
@@ -591,20 +607,37 @@ function LaTeXStep() {
             <span className="font-semibold text-[var(--color-text-main)]">PDF Preview</span>
           </div>
           <div className="flex-1 bg-[#525659] relative min-h-0">
-            <iframe name="deepscan-latex-pdf-preview" className={`w-full h-full border-none transition-opacity duration-300 ${compiling ? 'opacity-50' : 'opacity-100'}`} title="Compiled PDF" />
-            {/* We overlay a placeholder if iframe is empty, though iframe will stay empty until form submit */}
-            <div className={`absolute inset-0 flex flex-col items-center justify-center text-white/70 pointer-events-none transition-opacity duration-300 hidden`}>
-              {/* Could add complex empty state logic, but iframe handles PDF viewing best */}
-            </div>
+            <iframe
+              name="deepscan-latex-pdf-preview"
+              src={pdfUrl || undefined}
+              className={`w-full h-full border-none transition-opacity duration-300 ${compiling ? 'opacity-50' : 'opacity-100'}`}
+              title="Compiled PDF"
+            />
+            {/* Empty state until first compile */}
+            {!pdfUrl && !compileError && !compiling && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-white/60 pointer-events-none">
+                <FileDown className="w-10 h-10 mb-3 opacity-50" />
+                <p className="text-sm">Click “Compile PDF” to render a preview.</p>
+              </div>
+            )}
+            {/* Compile error log */}
+            {compileError && (
+              <div className="absolute inset-0 overflow-auto bg-[#1e1e1e] p-4">
+                <div className="flex items-center gap-2 text-red-400 text-sm font-bold mb-2">
+                  <AlertTriangle className="w-4 h-4" /> Compilation failed
+                </div>
+                <pre className="text-[11px] leading-relaxed text-red-200 whitespace-pre-wrap font-mono">{compileError}</pre>
+              </div>
+            )}
           </div>
 
-          {/* Hidden compile form */}
-          <form action="https://texlive.net/cgi-bin/latexcgi" method="POST" encType="multipart/form-data" target="deepscan-latex-pdf-preview" className="hidden" ref={latexFormRef}>
-            <input type="hidden" name="filecontents[]" value={latexContent} />
-            <input type="hidden" name="filename[]" value="main.tex" />
-            <input type="hidden" name="engine" value="pdflatex" />
-            <input type="hidden" name="return" value="pdf" />
-          </form>
+          {/* Auto-correct notes (shown after a compile) */}
+          {compileNotes.length > 0 && (
+            <div className="shrink-0 px-3 py-2 bg-amber-50 border-t border-amber-200 text-[11px] text-amber-800">
+              <span className="font-semibold">Auto-corrected:</span> {compileNotes.join(' · ')}
+            </div>
+          )}
+
         </div>
       </div>
 

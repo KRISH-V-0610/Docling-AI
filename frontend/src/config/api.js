@@ -22,15 +22,15 @@ export const API = {
 export const ENDPOINTS = {
   auth:         `${API.EXPRESS}/api/auth`,
   projects:     `${API.EXPRESS}/api/projects`,
-  latexCompile: `${API.EXPRESS}/api/latex-api/compile`,
 
   // Python AI unified service mounts:
   //   /api/v2/ask                       → Dockyyy chatbot
   //   /deepscan/api/v2/pipeline/stream  → deep-scan (core document→LaTeX engine)
   //   /files/...                        → DocBot DOCX editor agent
-  chatbot:      `${API.PYTHON_AI}/api/v2`,
-  deepScan:     `${API.PYTHON_AI}/deepscan`,
-  fileEditor:   `${API.PYTHON_AI}/files`,
+  chatbot:        `${API.PYTHON_AI}/api/v2`,
+  deepScan:       `${API.PYTHON_AI}/deepscan`,
+  deepScanCompile:`${API.PYTHON_AI}/deepscan/api/v2/compile`,
+  fileEditor:     `${API.PYTHON_AI}/files`,
 };
 
 // =====================================================================

@@ -45,6 +45,16 @@ const useDeepScanStore = create((set) => ({
   latexContent: "",
   setLatexContent: (c) => set({ latexContent: c || "" }),
 
+  // ── Figure assets extracted from the document (Phase B) ──
+  assets: [],
+  assetsBase: null,
+  jobId: null,
+  setAssets: (assets, assetsBase, jobId) => set({ assets, assetsBase, jobId }),
+
+  // ── Content-integrity report (Phase C — no-data-loss check) ──
+  integrityReport: null,
+  setIntegrityReport: (r) => set({ integrityReport: r }),
+
   // ── Agent documents (formatted files list from server) ──
   agentDocuments: [],
   setAgentDocuments: (docs) => set({ agentDocuments: docs }),
@@ -65,6 +75,10 @@ const useDeepScanStore = create((set) => ({
       formattedFile: null,
       complianceScore: null,
       latexContent: "",
+      assets: [],
+      assetsBase: null,
+      jobId: null,
+      integrityReport: null,
       agentDocuments: [],
     }),
 }));

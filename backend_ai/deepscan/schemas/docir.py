@@ -203,6 +203,9 @@ class DocElement(BaseModel):
 
     # Figure-specific
     figure_number: Optional[int] = None
+    image_path: Optional[str] = None          # on-disk path/filename of extracted image
+    image_width_emu: Optional[int] = None     # intrinsic width  (EMU) if known
+    image_height_emu: Optional[int] = None    # intrinsic height (EMU) if known
 
     # Caption (for tables / figures)
     caption: Optional[str] = None

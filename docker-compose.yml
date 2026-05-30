@@ -34,9 +34,9 @@ services:
       retries: 5
 
   backend:
-    image: node:20-alpine
-    working_dir: /app
-    command: sh -c "npm install && npm start"
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       PORT: 3000
       MONGO_URI: mongodb://mongo:27017/hackamined
@@ -45,7 +45,7 @@ services:
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
     volumes:
-      - ./backend:/app
+      - ./backend:/app                   # live-reload: code changes reflect instantly
       - express-node-modules:/app/node_modules
     ports:
       - "3000:3000"
@@ -54,9 +54,10 @@ services:
         condition: service_healthy
 
   backend_ai:
-    image: python:3.11-slim
+    build:
+      context: .
+      dockerfile: backend_ai/Dockerfile
     working_dir: /repo
-    command: sh -c "pip install --no-cache-dir -r backend_ai/requirements.txt && python -m backend_ai.main"
     environment:
       BACKEND_AI_HOST: 0.0.0.0
       BACKEND_AI_PORT: 8000
@@ -70,12 +71,12 @@ services:
       REQUIRE_AUTH: ${REQUIRE_AUTH:-false}
       # backend_ai/main.py pins these to backend_ai/data/* automatically.
     volumes:
-      - ./:/repo
-      - backend-ai-pip:/root/.cache/pip
+      - ./:/repo                         # live-reload: code changes reflect instantly
+      - tectonic-cache:/root/.cache/Tectonic  # cache TeX packages across restarts
     ports:
       - "8000:8000"
 
 volumes:
   mongo-data:
   express-node-modules:
-  backend-ai-pip:
+  tectonic-cache:

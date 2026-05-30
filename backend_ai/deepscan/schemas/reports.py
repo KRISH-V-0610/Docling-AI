@@ -133,6 +133,44 @@ class CitationReport(BaseModel):
         self.consistency_score = round(max(0, (1 - issues / total)) * 100, 1)
 
 
+# ── Content-integrity report (no-data-loss guarantee) ────────
+
+class ContentIntegrityReport(BaseModel):
+    """
+    Compares the INPUT manuscript against the generated LaTeX to prove no
+    content was dropped or silently summarized by the LLM. Generated after
+    LaTeX assembly (Phase C).
+    """
+    passed: bool = True
+    severity: Severity = Severity.INFO  # info=ok, warning=some loss, error=fail
+
+    word_count_in: int = 0
+    word_count_out: int = 0
+    word_retention_ratio: float = 1.0  # out / in
+
+    paragraph_count_in: int = 0
+    paragraph_count_out: int = 0
+
+    figure_count_in: int = 0
+    figure_count_out: int = 0  # number of \includegraphics in the LaTeX
+
+    table_count_in: int = 0
+    table_count_out: int = 0  # number of \begin{tabular} in the LaTeX
+
+    token_similarity: float = 1.0  # 0.0–1.0 sequence similarity of normalized text
+
+    notes: list[str] = Field(default_factory=list)
+
+    def summary(self) -> str:
+        return (
+            f"words {self.word_count_out}/{self.word_count_in} "
+            f"({round(self.word_retention_ratio * 100)}%), "
+            f"figures {self.figure_count_out}/{self.figure_count_in}, "
+            f"tables {self.table_count_out}/{self.table_count_in}, "
+            f"similarity {round(self.token_similarity * 100)}%"
+        )
+
+
 # ── Pipeline result (wraps everything) ───────────────────────
 
 class FormatResult(BaseModel):

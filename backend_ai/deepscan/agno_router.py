@@ -52,6 +52,167 @@ def _extract_from_docx(file_path: Path) -> str:
     return text
 
 
+# ---------------------------------------------------------------------------
+# Image extraction (Phase B) — pull figures out of the formatted DOCX so they
+# survive into the generated LaTeX as real \includegraphics.
+# ---------------------------------------------------------------------------
+
+# Formats pdflatex/tectonic can \includegraphics directly.
+_PDFLATEX_OK_EXT = {".png", ".jpg", ".jpeg", ".pdf"}
+
+_EXT_BY_CONTENT_TYPE = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/gif": ".gif",
+    "image/bmp": ".bmp",
+    "image/tiff": ".tiff",
+    "image/x-emf": ".emf",
+    "image/x-wmf": ".wmf",
+    "image/webp": ".webp",
+    "application/pdf": ".pdf",
+}
+
+
+def _raster_to_png(blob: bytes) -> bytes | None:
+    """Convert a raster image (gif/bmp/tiff/webp) to PNG via Pillow. Returns
+    None when conversion isn't possible (e.g. vector EMF/WMF)."""
+    try:
+        import io
+
+        from PIL import Image
+
+        im = Image.open(io.BytesIO(blob))
+        im = im.convert("RGBA") if im.mode in ("RGBA", "P", "LA") else im.convert("RGB")
+        out = io.BytesIO()
+        im.save(out, format="PNG")
+        return out.getvalue()
+    except Exception:
+        return None
+
+
+def _save_docx_image(doc, rid: str, assets_dir: Path, n: int) -> Optional[str]:
+    """Save the image referenced by relationship id *rid* into *assets_dir* as
+    figN.<ext>. Converts unsupported raster formats to PNG; returns the saved
+    filename, or None when the image can't be made pdflatex-compatible."""
+    try:
+        part = doc.part.related_parts[rid]
+        blob = part.blob
+    except (KeyError, AttributeError, Exception):
+        return None
+
+    ct = (getattr(part, "content_type", "") or "").lower()
+    ext = _EXT_BY_CONTENT_TYPE.get(ct)
+    if ext is None:
+        pn = str(getattr(part, "partname", "")).lower()
+        for e in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".tif",
+                  ".emf", ".wmf", ".webp", ".pdf"):
+            if pn.endswith(e):
+                ext = e
+                break
+
+    if ext in _PDFLATEX_OK_EXT:
+        fname = f"fig{n}{ext}"
+        (assets_dir / fname).write_bytes(blob)
+        return fname
+
+    # Try to convert raster formats (gif/bmp/tiff/webp) → PNG.
+    png = _raster_to_png(blob)
+    if png is not None:
+        fname = f"fig{n}.png"
+        (assets_dir / fname).write_bytes(png)
+        return fname
+
+    # Vector EMF/WMF or unknown — drop (caller logs a warning); text is kept.
+    return None
+
+
+def _extract_text_and_images(file_path: Path, assets_dir: Path) -> tuple[str, list[dict], int]:
+    """Walk a DOCX in document order, returning (text_with_sentinels, figures,
+    skipped_count). A ``[[FIGURE_n]]`` sentinel is placed on its own line where
+    each successfully-saved image occurs, so the LLM can keep figure placement.
+
+    figures: list of {"number": int, "filename": str, "token": str}.
+    skipped_count: images that couldn't be made pdflatex-compatible (dropped).
+    """
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    doc = Document(str(file_path))
+    assets_dir.mkdir(parents=True, exist_ok=True)
+
+    lines: list[str] = []
+    figures: list[dict] = []
+    fig_n = 0
+    skipped = 0
+
+    blip_tag = ".//" + qn("a:blip")
+    embed_attr = qn("r:embed")
+    link_attr = qn("r:link")
+
+    for para in doc.paragraphs:
+        if para.text.strip():
+            lines.append(para.text)
+
+        for blip in para._element.findall(blip_tag):
+            rid = blip.get(embed_attr) or blip.get(link_attr)
+            if not rid:
+                continue
+            saved = _save_docx_image(doc, rid, assets_dir, fig_n + 1)
+            if saved:
+                fig_n += 1
+                token = f"[[FIGURE_{fig_n}]]"
+                lines.append(token)
+                figures.append({"number": fig_n, "filename": saved, "token": token})
+            else:
+                skipped += 1
+
+    return "\n".join(lines), figures, skipped
+
+
+def _figure_env(fig: dict) -> str:
+    """Build a LaTeX figure float for a saved image."""
+    fname = fig["filename"]
+    caption = fig.get("caption") or f"Figure {fig['number']}"
+    return (
+        "\\begin{figure}[h]\n"
+        "\\centering\n"
+        f"\\includegraphics[width=0.8\\linewidth]{{assets/{fname}}}\n"
+        f"\\caption{{{caption}}}\n"
+        f"\\label{{fig:{fig['number']}}}\n"
+        "\\end{figure}"
+    )
+
+
+def _inject_figures(body: str, figures: list[dict]) -> str:
+    """Replace every ``[[FIGURE_n]]`` sentinel with a real figure float.
+    Any figure whose sentinel the LLM dropped is deterministically re-appended
+    at the end so **no figure is ever lost**."""
+    if not figures:
+        # Still strip any stray sentinels the model might have hallucinated.
+        return re.sub(r"\[\[FIGURE_\d+\]\]", "", body)
+
+    by_num = {f["number"]: f for f in figures}
+    present: set[int] = set()
+
+    def _repl(m: re.Match) -> str:
+        n = int(m.group(1))
+        fig = by_num.get(n)
+        if not fig:
+            return ""
+        present.add(n)
+        return _figure_env(fig)
+
+    body = re.sub(r"\[\[FIGURE_(\d+)\]\]", _repl, body)
+
+    missing = [f for f in figures if f["number"] not in present]
+    if missing:
+        tail = "\n\n".join(_figure_env(f) for f in missing)
+        body = f"{body}\n\n{tail}"
+
+    return body
+
+
 def _sse(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
 
@@ -377,7 +538,7 @@ async def pipeline_stream(
             yield _sse({"stage": 1, "log": f"Style: {style} | File: {file.filename}"})
             await asyncio.sleep(0.05)
 
-            from backend.agents.orchestrator import Orchestrator
+            from .agents.orchestrator import Orchestrator
 
             yield _sse({"stage": 1, "log": "Step 1/6 — Ingesting document..."})
             orchestrator = Orchestrator()
@@ -418,16 +579,18 @@ async def pipeline_stream(
                 "stage_complete": 1,
             })
 
-            # Copy formatted file to MCP documents directory for agent editing
+            # Copy formatted file to the DocBot documents directory for agent editing.
             try:
-                from backend.config import PROJECT_ROOT
-                mcp_docs_dir = PROJECT_ROOT / "documents"
-                mcp_docs_dir.mkdir(parents=True, exist_ok=True)
-                dest = mcp_docs_dir / formatted_path.name
+                docs_dir = Path(
+                    os.getenv("DOCUMENTS_DIR")
+                    or (Path(__file__).resolve().parent.parent / "data" / "documents_store")
+                )
+                docs_dir.mkdir(parents=True, exist_ok=True)
+                dest = docs_dir / formatted_path.name
                 shutil.copy2(str(formatted_path), str(dest))
                 yield _sse({"stage": 1, "log": f"📂 Copied to agent documents: {formatted_path.name}"})
             except Exception as copy_err:
-                logger.warning(f"Could not copy to MCP documents: {copy_err}")
+                logger.warning(f"Could not copy to DocBot documents: {copy_err}")
 
             # ══════════════════════════════════════════════════════
             # STAGE 2 — LLM LaTeX Generation (Chunked)
@@ -446,12 +609,20 @@ async def pipeline_stream(
             yield _sse({"stage": 2, "log": "🧠 Starting LLM-based LaTeX generation..."})
             await asyncio.sleep(0.05)
 
-            yield _sse({"stage": 2, "log": "Extracting text from formatted document..."})
+            yield _sse({"stage": 2, "log": "Extracting text and figures from formatted document..."})
+
+            # Per-job assets dir alongside the formatted DOCX (served via /assets).
+            from .config import OUTPUT_FORMATTED_DIR
+            job_id = formatted_path.stem
+            assets_dir = OUTPUT_FORMATTED_DIR / f"{job_id}_assets"
+
+            figures: list[dict] = []
             try:
-                formatted_text = _extract_from_docx(formatted_path)
+                formatted_text, figures, skipped_imgs = _extract_text_and_images(formatted_path, assets_dir)
             except Exception as e:
-                yield _sse({"error": f"Failed to read formatted document: {e}"})
-                return
+                logger.warning("Image-aware extraction failed (%s); falling back to text-only.", e)
+                formatted_text = _extract_from_docx(formatted_path)
+                skipped_imgs = 0
 
             if not formatted_text.strip():
                 yield _sse({"error": "Formatted document is empty — cannot generate LaTeX."})
@@ -459,6 +630,10 @@ async def pipeline_stream(
 
             word_count = len(formatted_text.split())
             yield _sse({"stage": 2, "log": f"Extracted {word_count} words from formatted document."})
+            if figures:
+                yield _sse({"stage": 2, "log": f"🖼️ Extracted {len(figures)} figure(s) — will embed as \\includegraphics."})
+            if skipped_imgs:
+                yield _sse({"stage": 2, "log": f"⚠ {skipped_imgs} image(s) in an unsupported format (e.g. EMF/WMF) were skipped."})
 
             # ── Split into sections for chunked generation ──
             sections = _split_into_sections(formatted_text)
@@ -476,11 +651,14 @@ async def pipeline_stream(
                     f"2. Use \\section{{}}, \\subsection{{}}, \\subsubsection{{}} for headings.\n"
                     f"3. Convert citations to \\cite{{author_year}} format.\n"
                     f"4. Preserve EVERY paragraph, EVERY sentence, EVERY detail. Do NOT summarize.\n"
-                    f"5. For figure/table descriptions, use \\begin{{figure}}[H]...\\end{{figure}} or \\begin{{table}}[H]...\\end{{table}}.\n"
-                    f"6. Use proper LaTeX for math: $...$ for inline, $$...$$ for display.\n"
-                    f"7. Use \\textit{{}} for species names, \\textbf{{}} for emphasis.\n"
-                    f"8. Return ONLY raw LaTeX code. NO markdown fences. NO explanations.\n"
-                    f"9. Do NOT skip or truncate ANY content. Every word matters.\n"
+                    f"5. For TABLE descriptions, use \\begin{{table}}[H]...\\end{{table}}.\n"
+                    f"6. FIGURES: the text contains placeholder tokens like [[FIGURE_1]], [[FIGURE_2]]. "
+                    f"Keep every such token EXACTLY as-is, on its own line, where it appears. "
+                    f"Do NOT create \\begin{{figure}} or \\includegraphics yourself — the tokens are replaced automatically.\n"
+                    f"7. Use proper LaTeX for math: $...$ for inline, $$...$$ for display.\n"
+                    f"8. Use \\textit{{}} for species names, \\textbf{{}} for emphasis.\n"
+                    f"9. Return ONLY raw LaTeX code. NO markdown fences. NO explanations.\n"
+                    f"10. Do NOT skip or truncate ANY content. Every word matters.\n"
                 ),
                 markdown=False,
             )
@@ -545,8 +723,16 @@ async def pipeline_stream(
             yield _sse({"stage": 2, "log": "Post-processing LaTeX (fixing LLM artifacts)..."})
             merged_body = _postprocess_latex(merged_body, style)
 
-            # Style-specific preamble
+            # Deterministically replace [[FIGURE_n]] sentinels with real figure
+            # floats; re-append any the LLM dropped so no figure is ever lost.
+            if figures:
+                yield _sse({"stage": 2, "log": f"Embedding {len(figures)} figure(s) into LaTeX..."})
+            merged_body = _inject_figures(merged_body, figures)
+
+            # Style-specific preamble (+ graphicspath so assets/ resolves).
             preamble = _build_preamble(style)
+            if figures:
+                preamble = f"{preamble}\\graphicspath{{{{assets/}}}}\n"
 
             merged_latex = (
                 f"{preamble}\n"
@@ -557,10 +743,52 @@ async def pipeline_stream(
 
             yield _sse({"stage": 2, "log": f"✅ LaTeX generation complete! ({len(merged_latex)} chars, {len(merged_latex.split(chr(10)))} lines)"})
 
+            # ══════════════════════════════════════════════════════
+            # CONTENT-INTEGRITY CHECK (Phase C) — prove no data loss
+            # ══════════════════════════════════════════════════════
+            integrity_payload = None
+            try:
+                yield _sse({"stage": 3, "log": "🔎 Verifying content preservation..."})
+                from .agents.content_integrity import validate_content_preservation
+
+                # Original reference text = extracted formatted text minus figure
+                # sentinels (so [[FIGURE_n]] tokens don't count as words).
+                original_ref_text = re.sub(r"\[\[FIGURE_\d+\]\]", "", formatted_text)
+                table_count_in = 0
+                if result.structure_summary:
+                    table_count_in = int(result.structure_summary.get("table", 0))
+                src_fmt = Path(file.filename or "x.docx").suffix.lstrip(".").lower() or "docx"
+
+                integrity = validate_content_preservation(
+                    original_text=original_ref_text,
+                    latex_str=merged_latex,
+                    figure_count_in=len(figures),
+                    table_count_in=table_count_in,
+                    source_format=src_fmt,
+                )
+                integrity_payload = integrity.model_dump(mode="json")
+
+                icon = {"info": "✅", "warning": "⚠️", "error": "🔴"}.get(integrity.severity.value, "ℹ️")
+                yield _sse({
+                    "stage": 3,
+                    "log": f"{icon} Integrity: {integrity.summary()}",
+                    "integrity": integrity_payload,
+                })
+            except Exception as ie:
+                logger.warning("Integrity check error: %s", ie)
+
+            asset_files = [f["filename"] for f in figures]
             yield _sse({
                 "is_final": True,
                 "latex": merged_latex,
                 "formatted_file": formatted_path.name if formatted_path else None,
+                "job": job_id,
+                "assets": asset_files,
+                "assets_base": f"/deepscan/api/v2/assets/{job_id}",
+                "figure_count": len(figures),
+                "missing_figures": [],
+                "integrity": integrity_payload,
+                "content_integrity_passed": (integrity_payload or {}).get("passed", True),
             })
 
         except Exception as e:
@@ -580,7 +808,7 @@ async def pipeline_stream(
 @agno_router.get("/api/v2/download/{filename}")
 async def download_formatted(filename: str):
     """Download the statically formatted .docx file."""
-    from backend.config import OUTPUT_FORMATTED_DIR
+    from .config import OUTPUT_FORMATTED_DIR
 
     file_path = OUTPUT_FORMATTED_DIR / filename
     if not file_path.exists():
@@ -589,6 +817,106 @@ async def download_formatted(filename: str):
         str(file_path),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         filename=filename,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Serve extracted figure assets (Phase B) — referenced by \includegraphics
+# {assets/figN.png} in generated LaTeX. The local compiler (Phase D) and the
+# diagram-upload flow (Phase I) read from here.
+# ---------------------------------------------------------------------------
+
+@agno_router.get("/api/v2/assets/{job}/{filename}")
+async def get_asset(job: str, filename: str):
+    """Return a single extracted figure image for a given job (formatted-file stem)."""
+    from .config import OUTPUT_FORMATTED_DIR
+
+    # Guard against path traversal.
+    if "/" in job or "\\" in job or "/" in filename or "\\" in filename or ".." in job or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid asset path")
+
+    asset_path = OUTPUT_FORMATTED_DIR / f"{job}_assets" / filename
+    if not asset_path.exists():
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return FileResponse(str(asset_path))
+
+
+# ---------------------------------------------------------------------------
+# Local LaTeX compile (Phase D) — tectonic + auto-correct. Replaces the flaky
+# texlive.net round-trip and renders figures from the job's assets/ dir.
+# ---------------------------------------------------------------------------
+
+from pydantic import BaseModel
+
+
+class CompileRequest(BaseModel):
+    latex: str
+    job: str | None = None          # formatted-file stem → resolves assets dir
+    autofix: bool = True
+    allow_llm_repair: bool = True
+
+
+@agno_router.post("/api/v2/compile")
+async def compile_latex_endpoint(req: CompileRequest):
+    """Compile LaTeX → PDF locally with tectonic.
+
+    Returns the PDF (application/pdf) on success, with the applied auto-fix
+    notes in the ``X-Latex-Notes`` header. On failure returns a JSON body with
+    the tectonic error log so the editor can show it inline.
+    """
+    from .config import OUTPUT_FORMATTED_DIR
+    from .latex_compile import compile_with_repair, autofix_latex, tectonic_available
+
+    if not req.latex or not req.latex.strip():
+        raise HTTPException(status_code=400, detail="LaTeX source is required.")
+
+    # Resolve the per-job assets dir (if the doc had figures).
+    assets_dir = None
+    if req.job and ".." not in req.job and "/" not in req.job and "\\" not in req.job:
+        candidate = OUTPUT_FORMATTED_DIR / f"{req.job}_assets"
+        if candidate.is_dir():
+            assets_dir = candidate
+
+    if not tectonic_available():
+        # Surface auto-fix work even when the engine is missing, so the client
+        # can fall back to remote compile with the cleaned source.
+        fixed, notes = autofix_latex(req.latex) if req.autofix else (req.latex, [])
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "engine": "tectonic",
+                "tectonic_available": False,
+                "message": "Local LaTeX engine (tectonic) is not installed on the server.",
+                "notes": notes,
+                "fixed_latex": fixed,
+            },
+        )
+
+    result = await asyncio.to_thread(
+        compile_with_repair,
+        req.latex,
+        assets_dir=assets_dir,
+        allow_llm_repair=req.allow_llm_repair,
+    )
+
+    if result.ok and result.pdf_bytes:
+        from fastapi.responses import Response
+        headers = {
+            "Content-Disposition": "inline; filename=main.pdf",
+            "X-Latex-Notes": json.dumps(result.notes)[:2000],
+        }
+        return Response(content=result.pdf_bytes, media_type="application/pdf", headers=headers)
+
+    return JSONResponse(
+        status_code=422,
+        content={
+            "success": False,
+            "engine": result.engine,
+            "message": "LaTeX compilation failed.",
+            "notes": result.notes,
+            "log": result.log[:12000],
+        },
     )
 
 
