@@ -6,7 +6,7 @@ FROM python:3.11-slim AS base
 
 # Install curl + tar to fetch tectonic, then remove them to keep the image lean
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl tar \
+    && apt-get install -y --no-install-recommends curl tar pandoc \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Install tectonic (baked into the image at build time) ────

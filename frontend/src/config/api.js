@@ -31,6 +31,9 @@ export const ENDPOINTS = {
   deepScan:       `${API.PYTHON_AI}/deepscan`,
   deepScanCompile:`${API.PYTHON_AI}/deepscan/api/v2/compile`,
   fileEditor:     `${API.PYTHON_AI}/files`,
+
+  //   /toolkit/...  → LaTeX Toolkit (Phase H): table/equation/bibtex/convert/export/chat
+  toolkit:        `${API.PYTHON_AI}/toolkit`,
 };
 
 // =====================================================================

@@ -16,7 +16,8 @@ import {
     LogOut,
     Bot,
     PlusCircle,
-    Microscope
+    Microscope,
+    Wrench
 } from 'lucide-react';
 import { cn } from './Button';
 import useAuthStore from '../store/useAuthStore';
@@ -57,6 +58,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
             children: [
                 { name: 'DocBot', path: '/advance-workshop', icon: Bot },
                 { name: 'Deep Scan', path: '/deep-scan', icon: Microscope },
+                { name: 'LaTeX Toolkit', path: '/toolkit', icon: Wrench },
             ]
         },
 

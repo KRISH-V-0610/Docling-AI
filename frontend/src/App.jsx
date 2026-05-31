@@ -16,6 +16,7 @@ import { AdvanceWorkspace } from './pages/AdvanceWorkspace';
 import { DeepScan } from './pages/DeepScan';
 import { Integrations } from './pages/Integrations';
 import { Workflows } from './pages/Workflows';
+import LatexToolkit from './pages/LatexToolkit';
 import useAuthStore from './store/useAuthStore';
 
 function PlaceholderPage({ title }) {
@@ -100,6 +101,7 @@ function App() {
             <Route path="/advance-workshop" element={<AdvanceWorkspace />} />
             <Route path="/integrations" element={<Integrations />} />
             <Route path="/workflows" element={<Workflows />} />
+            <Route path="/toolkit" element={<LatexToolkit />} />
           </Route>
         </Route>
 

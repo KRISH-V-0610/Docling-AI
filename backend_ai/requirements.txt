@@ -35,3 +35,17 @@ mcp
 sqlalchemy
 aiosqlite
 ddgs                  # DuckDuckGo search (newer agno renamed from duckduckgo-search)
+
+# ── Citation / bibliography (deepscan CitationEngine + latex_toolkit, Phase H) ─
+# citeproc-py was imported by citation_engine.py but never declared — this fixes
+# the long-standing silent fallback, and powers references_to_bibtex.
+citeproc-py
+citeproc-py-styles
+bibtexparser
+thefuzz              # fuzzy author-name matching in citation_engine (was undeclared)
+
+# ── LaTeX Toolkit (Phase H) — document conversion + export ───────────────────
+# pypandoc drives LaTeX→DOCX/MD export (needs the pandoc binary in the image);
+# PyMuPDF (fitz) powers PDF→LaTeX ingestion.
+pypandoc
+PyMuPDF

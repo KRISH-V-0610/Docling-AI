@@ -51,6 +51,7 @@ logger = logging.getLogger("backend-ai")
 from .chatbot import router as chatbot_router
 from .deepscan import router as deepscan_router
 from .file_editor import router as file_editor_router
+from .latex_toolkit import router as latex_toolkit_router
 from .common import JWTAuthMiddleware, DEFAULT_PUBLIC_PATHS
 
 
@@ -92,6 +93,10 @@ app.add_middleware(
         "/files/docs",
         "/files/redoc",
         "/files/openapi.json",
+        # LaTeX-toolkit public paths (catalog + templates are read-only)
+        "/toolkit/health",
+        "/toolkit/info",
+        "/toolkit/templates",
     ),
 )
 
@@ -114,9 +119,10 @@ def healthz():
         "status": "ok",
         "service": "backend-ai",
         "mounts": {
-            "chatbot":     "(root) — /api/v2/ask",
-            "deepscan":    "/deepscan",
-            "file_editor": "/files",
+            "chatbot":       "(root) — /api/v2/ask",
+            "deepscan":      "/deepscan",
+            "file_editor":   "/files",
+            "latex_toolkit": "/toolkit",
         },
     }
 
@@ -127,6 +133,7 @@ def healthz():
 app.include_router(chatbot_router)
 app.include_router(deepscan_router, prefix="/deepscan")
 app.include_router(file_editor_router, prefix="/files")
+app.include_router(latex_toolkit_router, prefix="/toolkit")
 
 
 if __name__ == "__main__":
