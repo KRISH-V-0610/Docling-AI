@@ -55,6 +55,15 @@ const useDeepScanStore = create((set) => ({
   integrityReport: null,
   setIntegrityReport: (r) => set({ integrityReport: r }),
 
+  // ── Missing figures (Phase I — diagram-needed popup) ──
+  // Figures the pipeline detected but couldn't extract (e.g. EMF/WMF charts).
+  // Each: { n, token, caption }. The LaTeX has a placeholder slot per entry.
+  missingFigures: [],
+  setMissingFigures: (v) => set({ missingFigures: v || [] }),
+  // Drop a figure from the list once the user has uploaded its image.
+  resolveFigure: (n) =>
+    set((s) => ({ missingFigures: s.missingFigures.filter((f) => f.n !== n) })),
+
   // ── Agent documents (formatted files list from server) ──
   agentDocuments: [],
   setAgentDocuments: (docs) => set({ agentDocuments: docs }),
@@ -79,6 +88,7 @@ const useDeepScanStore = create((set) => ({
       assetsBase: null,
       jobId: null,
       integrityReport: null,
+      missingFigures: [],
       agentDocuments: [],
     }),
 }));

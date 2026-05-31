@@ -158,30 +158,80 @@ def _extract_text_and_images(file_path: Path, assets_dir: Path) -> tuple[str, li
             rid = blip.get(embed_attr) or blip.get(link_attr)
             if not rid:
                 continue
-            saved = _save_docx_image(doc, rid, assets_dir, fig_n + 1)
+            fig_n += 1
+            token = f"[[FIGURE_{fig_n}]]"
+            lines.append(token)
+            saved = _save_docx_image(doc, rid, assets_dir, fig_n)
             if saved:
-                fig_n += 1
-                token = f"[[FIGURE_{fig_n}]]"
-                lines.append(token)
                 figures.append({"number": fig_n, "filename": saved, "token": token})
             else:
+                # Couldn't extract (e.g. vector EMF/WMF). Track as a MISSING
+                # figure (filename=None) so its placement is preserved and
+                # Phase I can prompt the user to upload an image for it.
                 skipped += 1
+                figures.append({"number": fig_n, "filename": None, "token": token})
 
     return "\n".join(lines), figures, skipped
 
 
 def _figure_env(fig: dict) -> str:
-    """Build a LaTeX figure float for a saved image."""
-    fname = fig["filename"]
-    caption = fig.get("caption") or f"Figure {fig['number']}"
+    """Build a LaTeX figure float for a saved image, or — when the image
+    couldn't be extracted (Phase I, filename is None) — a marked placeholder
+    box so the document still compiles and the slot can be filled later."""
+    n = fig["number"]
+    caption = fig.get("caption") or f"Figure {n}"
+    fname = fig.get("filename")
+    if not fname:
+        return _figure_placeholder(n, caption)
     return (
         "\\begin{figure}[h]\n"
         "\\centering\n"
         f"\\includegraphics[width=0.8\\linewidth]{{assets/{fname}}}\n"
         f"\\caption{{{caption}}}\n"
-        f"\\label{{fig:{fig['number']}}}\n"
+        f"\\label{{fig:{n}}}\n"
         "\\end{figure}"
     )
+
+
+def _figure_placeholder(n: int, caption: str = "") -> str:
+    """A visible placeholder for a figure whose image couldn't be extracted,
+    wrapped in ``% BEGIN_FIGURE_SLOT_n`` / ``% END_FIGURE_SLOT_n`` markers so
+    ``_fill_figure_slot`` can swap in the real image once the user uploads it."""
+    cap = caption or f"Figure {n}"
+    return (
+        f"% BEGIN_FIGURE_SLOT_{n}\n"
+        "\\begin{figure}[h]\n"
+        "\\centering\n"
+        "\\fbox{\\begin{minipage}{0.8\\linewidth}\\centering\\vspace{2cm}\n"
+        f"\\textit{{[Figure {n} --- image not extracted; upload to render]}}\n"
+        "\\vspace{2cm}\\end{minipage}}\n"
+        f"\\caption{{{cap}}}\n"
+        f"\\label{{fig:{n}}}\n"
+        "\\end{figure}\n"
+        f"% END_FIGURE_SLOT_{n}"
+    )
+
+
+def _fill_figure_slot(latex: str, n: int, rel_path: str, caption: str = "") -> str:
+    """Replace the marked placeholder for figure ``n`` with a real figure float
+    pointing at ``rel_path``. If the marker block is gone (user edited it away),
+    append the figure so an uploaded image is never silently lost."""
+    cap = caption or f"Figure {n}"
+    real = (
+        "\\begin{figure}[h]\n"
+        "\\centering\n"
+        f"\\includegraphics[width=0.8\\linewidth]{{{rel_path}}}\n"
+        f"\\caption{{{cap}}}\n"
+        f"\\label{{fig:{n}}}\n"
+        "\\end{figure}"
+    )
+    pattern = re.compile(
+        rf"% BEGIN_FIGURE_SLOT_{n}\b.*?% END_FIGURE_SLOT_{n}", re.DOTALL
+    )
+    if pattern.search(latex):
+        # lambda replacement so backslashes in `real` aren't read as backrefs.
+        return pattern.sub(lambda _: real, latex)
+    return latex.rstrip() + "\n\n" + real + "\n"
 
 
 def _inject_figures(body: str, figures: list[dict]) -> str:
@@ -759,10 +809,13 @@ async def pipeline_stream(
                     table_count_in = int(result.structure_summary.get("table", 0))
                 src_fmt = Path(file.filename or "x.docx").suffix.lstrip(".").lower() or "docx"
 
+                # Count only successfully-extracted figures — placeholders for
+                # missing ones don't emit \includegraphics yet.
+                extracted_count = sum(1 for f in figures if f.get("filename"))
                 integrity = validate_content_preservation(
                     original_text=original_ref_text,
                     latex_str=merged_latex,
-                    figure_count_in=len(figures),
+                    figure_count_in=extracted_count,
                     table_count_in=table_count_in,
                     source_format=src_fmt,
                 )
@@ -777,7 +830,15 @@ async def pipeline_stream(
             except Exception as ie:
                 logger.warning("Integrity check error: %s", ie)
 
-            asset_files = [f["filename"] for f in figures]
+            asset_files = [f["filename"] for f in figures if f.get("filename")]
+            # Figures whose image couldn't be extracted — the frontend (Phase I)
+            # prompts the user to upload an image for each.
+            missing_figures = [
+                {"n": f["number"], "token": f["token"], "caption": f.get("caption") or ""}
+                for f in figures if not f.get("filename")
+            ]
+            if missing_figures:
+                yield _sse({"stage": 3, "log": f"🖼️ {len(missing_figures)} figure(s) need an uploaded image."})
             yield _sse({
                 "is_final": True,
                 "latex": merged_latex,
@@ -785,8 +846,8 @@ async def pipeline_stream(
                 "job": job_id,
                 "assets": asset_files,
                 "assets_base": f"/deepscan/api/v2/assets/{job_id}",
-                "figure_count": len(figures),
-                "missing_figures": [],
+                "figure_count": len(asset_files),
+                "missing_figures": missing_figures,
                 "integrity": integrity_payload,
                 "content_integrity_passed": (integrity_payload or {}).get("passed", True),
             })
@@ -839,6 +900,54 @@ async def get_asset(job: str, filename: str):
     if not asset_path.exists():
         raise HTTPException(status_code=404, detail="Asset not found")
     return FileResponse(str(asset_path))
+
+
+@agno_router.post("/api/v2/assets/{job}/{n}")
+async def upload_figure(
+    job: str,
+    n: int,
+    file: UploadFile = File(...),
+    latex: str = Form(""),
+):
+    """Phase I — upload an image for a figure the pipeline couldn't extract.
+
+    Saves the image into the job's assets dir as ``fig{n}.png`` (normalised to
+    PNG when possible) and, when the caller passes the current ``latex``,
+    rewrites the placeholder slot into a real ``\\includegraphics`` and returns
+    the updated source. The frontend swaps its editor content with the returned
+    ``latex`` and recompiles so the figure renders in the PDF.
+    """
+    from .config import OUTPUT_FORMATTED_DIR
+
+    if "/" in job or "\\" in job or ".." in job:
+        raise HTTPException(status_code=400, detail="Invalid job id")
+
+    job_dir = OUTPUT_FORMATTED_DIR / f"{job}_assets"
+    job_dir.mkdir(parents=True, exist_ok=True)
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file.")
+
+    png = _raster_to_png(raw)
+    if png is not None:
+        fname = f"fig{n}.png"
+        (job_dir / fname).write_bytes(png)
+    else:
+        ext = (os.path.splitext(file.filename or "")[1] or ".png").lower()
+        fname = f"fig{n}{ext}"
+        (job_dir / fname).write_bytes(raw)
+
+    rel_path = f"assets/{fname}"
+    updated_latex = _fill_figure_slot(latex, n, rel_path) if latex else ""
+
+    return {
+        "ok": True,
+        "n": n,
+        "filename": fname,
+        "rel_path": rel_path,
+        "latex": updated_latex,
+    }
 
 
 # ---------------------------------------------------------------------------
