@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     FileText,
@@ -10,27 +10,26 @@ import { Button } from '../components/Button';
 import { motion } from 'framer-motion';
 import useAuthStore from '../store/useAuthStore';
 import useProjectStore from '../store/useProjectStore';
+import { useCreateProject, useDeleteProject } from '../hooks/queries/useProjectQueries';
 import { useToast } from '../components/Toasts';
 
 export function Dashboard() {
     const navigate = useNavigate();
-    const { user, token } = useAuthStore();
-    const { recentProjects, fetchRecentProjects, createProject, deleteProject, status } = useProjectStore();
+    const { user } = useAuthStore();
+    const recentProjects = useProjectStore((s) => s.recentProjects);
+    const createProject = useCreateProject();
+    const deleteProject = useDeleteProject();
     const { toast, confirm } = useToast();
-
-    useEffect(() => {
-        if (token) {
-            fetchRecentProjects();
-        }
-    }, [token, fetchRecentProjects]);
+    const isCreating = createProject.isPending;
 
     const handleCreateProject = async () => {
-        const newProject = await createProject(''); // Empty triggers auto-name "Untitled" / "Untitled (1)" in backend
-        if (newProject) {
+        try {
+            // Empty title triggers auto-name "Untitled"/"Untitled (1)" in backend.
+            const newProject = await createProject.mutateAsync('');
             toast({ title: 'Project Created', description: `Started working on ${newProject.title}`, variant: 'success' });
             navigate(`/project/${newProject._id}`);
-        } else {
-            toast({ title: 'Error', description: 'Failed to create project', variant: 'error' });
+        } catch (err) {
+            toast({ title: 'Error', description: err.message || 'Failed to create project', variant: 'error' });
         }
     };
 
@@ -42,11 +41,11 @@ export function Dashboard() {
             description: "Are you sure you want to delete this project? This action cannot be undone.",
             confirmText: "Delete",
             onConfirm: async () => {
-                const success = await deleteProject(projectId);
-                if (success) {
+                try {
+                    await deleteProject.mutateAsync(projectId);
                     toast({ title: 'Project Deleted', description: 'The project has been successfully removed.', variant: 'success' });
-                } else {
-                    toast({ title: 'Error', description: 'Failed to delete project.', variant: 'error' });
+                } catch (err) {
+                    toast({ title: 'Error', description: err.message || 'Failed to delete project.', variant: 'error' });
                 }
             }
         });
@@ -77,10 +76,10 @@ export function Dashboard() {
                     {/* Create New Project Card */}
                     <div
                         onClick={handleCreateProject}
-                        className={`bg-[var(--color-surface-200)]/60 rounded-[var(--radius-xl)] flex items-center justify-center border-2 border-dashed border-[var(--color-surface-300)] min-h-[160px] cursor-pointer hover:bg-[var(--color-surface-200)] transition-colors ${status === 'loading' ? 'opacity-50 pointer-events-none' : ''}`}
+                        className={`bg-[var(--color-surface-200)]/60 rounded-[var(--radius-xl)] flex items-center justify-center border-2 border-dashed border-[var(--color-surface-300)] min-h-[160px] cursor-pointer hover:bg-[var(--color-surface-200)] transition-colors ${isCreating ? 'opacity-50 pointer-events-none' : ''}`}
                     >
                         <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm text-[var(--color-primary-500)]">
-                            <Plus className={`w-5 h-5 ${status === 'loading' ? 'animate-spin' : ''}`} />
+                            <Plus className={`w-5 h-5 ${isCreating ? 'animate-spin' : ''}`} />
                         </div>
                     </div>
 

@@ -1,31 +1,27 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FolderOpen, Plus, Clock, Trash2 } from 'lucide-react';
-import useProjectStore from '../store/useProjectStore';
 import useAuthStore from '../store/useAuthStore';
+import { useProjects, useCreateProject, useDeleteProject } from '../hooks/queries/useProjectQueries';
 import { Button } from '../components/Button';
 import { useToast } from '../components/Toasts';
 
 export function History() {
     const navigate = useNavigate();
-    const { projects, fetchAllProjects, createProject, deleteProject, status } = useProjectStore();
-    const { user } = useAuthStore();
+    const { isAuthenticated } = useAuthStore();
+    const { data: projects = [], isLoading } = useProjects(isAuthenticated);
+    const createProject = useCreateProject();
+    const deleteProject = useDeleteProject();
     const { toast, confirm } = useToast();
 
-    useEffect(() => {
-        if (user) {
-            fetchAllProjects();
-        }
-    }, [user, fetchAllProjects]);
-
     const handleCreateProject = async () => {
-        const newProject = await createProject('');
-        if (newProject) {
+        try {
+            const newProject = await createProject.mutateAsync('');
             toast({ title: 'Workspace Created', description: `Opened a new workspace`, variant: 'success' });
             navigate(`/project/${newProject._id}`);
-        } else {
-            toast({ title: 'Error', description: 'Failed to create workspace', variant: 'error' });
+        } catch (err) {
+            toast({ title: 'Error', description: err.message || 'Failed to create workspace', variant: 'error' });
         }
     };
 
@@ -36,11 +32,11 @@ export function History() {
             description: "Are you sure you want to delete this project? This action cannot be undone.",
             confirmText: "Delete",
             onConfirm: async () => {
-                const success = await deleteProject(projectId);
-                if (success) {
+                try {
+                    await deleteProject.mutateAsync(projectId);
                     toast({ title: 'Project Deleted', description: 'The project has been successfully removed.', variant: 'success' });
-                } else {
-                    toast({ title: 'Error', description: 'Failed to delete project.', variant: 'error' });
+                } catch (err) {
+                    toast({ title: 'Error', description: err.message || 'Failed to delete project.', variant: 'error' });
                 }
             }
         });
@@ -63,7 +59,7 @@ export function History() {
                 </div>
                 <Button
                     onClick={handleCreateProject}
-                    disabled={status === 'loading'}
+                    disabled={createProject.isPending}
                     className="bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-900)] text-white shadow-md font-bold"
                 >
                     <Plus className="w-5 h-5 mr-2" />
@@ -71,7 +67,7 @@ export function History() {
                 </Button>
             </div>
 
-            {status === 'loading' && projects.length === 0 ? (
+            {isLoading && projects.length === 0 ? (
                 <div className="flex justify-center py-20">
                     <div className="w-10 h-10 border-4 border-[var(--color-primary-500)] border-t-transparent rounded-full animate-spin"></div>
                 </div>

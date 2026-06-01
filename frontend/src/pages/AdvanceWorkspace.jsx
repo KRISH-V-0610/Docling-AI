@@ -7,6 +7,7 @@ import {
 import { Button } from '../components/Button';
 import axios from 'axios';
 import { ENDPOINTS } from '../config/api';
+import { useDocuments } from '../hooks/queries/useDocuments';
 
 const API_BASE = ENDPOINTS.fileEditor;
 
@@ -33,7 +34,7 @@ export function AdvanceWorkspace() {
     const [sessionId] = useState(() =>
         localStorage.getItem('agentSessionId') || `ui-${Math.random().toString(36).substr(2, 9)}`
     );
-    const [docs, setDocs] = useState([]);
+    const { data: docs = [], refetch: refetchDocuments } = useDocuments();
     const [selectedFile, setSelectedFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [deleting, setDeleting] = useState(null);
@@ -63,17 +64,8 @@ export function AdvanceWorkspace() {
         localStorage.setItem('agentSessionId', sessionId);
     }, [chatHistory, sessionId]);
 
-    /* ── Fetch Docs ── */
-    const fetchDocuments = async () => {
-        try {
-            const res = await axios.get(`${API_BASE}/documents`);
-            setDocs(res.data || []);
-        } catch (e) {
-            console.error('Error fetching docs', e);
-        }
-    };
-
-    useEffect(() => { fetchDocuments(); }, []);
+    /* ── Docs come from React Query (useDocuments). refetchDocuments() replaces
+          the old manual fetchDocuments() after upload/delete. ── */
 
     useEffect(() => {
         if (chatScrollRef.current)
@@ -114,7 +106,7 @@ export function AdvanceWorkspace() {
         try {
             const res = await axios.post(`${API_BASE}/documents/upload`, formData);
             if (res.data?.filename) {
-                await fetchDocuments();
+                await refetchDocuments();
                 handleSelectFile(res.data.filename, false);
             }
         } catch (err) {
@@ -141,7 +133,7 @@ export function AdvanceWorkspace() {
                 setSelectedFile(null);
                 setPreviewHtml(null);
             }
-            await fetchDocuments();
+            await refetchDocuments();
         } catch (err) {
             alert('Delete Error: ' + (err.response?.data?.detail || err.message));
         } finally {
@@ -191,7 +183,7 @@ export function AdvanceWorkspace() {
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             }]);
 
-            await fetchDocuments();
+            await refetchDocuments();
             if (selectedFile) setTimeout(() => refreshPreview(selectedFile), 600);
         } catch (err) {
             const errMsg = err.code === 'ECONNABORTED' ? 'Request timed out' : err.message;

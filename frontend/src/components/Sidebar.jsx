@@ -27,7 +27,7 @@ import useDeepScanStore from '../store/useDeepScanStore';
 
 export function Sidebar({ isOpen, toggleSidebar }) {
     const { isAuthenticated, user, logout } = useAuthStore();
-    const { projects, fetchAllProjects, recentProjects } = useProjectStore();
+    const recentProjects = useProjectStore((s) => s.recentProjects);
     const { isProcessing } = useAppStore();
     const dsStep = useDeepScanStore(s => s.currentStep);
     const dsDone = useDeepScanStore(s => s.isProcessingDone);
@@ -42,12 +42,6 @@ export function Sidebar({ isOpen, toggleSidebar }) {
             toggleSidebar();
         }
     };
-
-    React.useEffect(() => {
-        if (isAuthenticated) {
-            fetchAllProjects();
-        }
-    }, [isAuthenticated, fetchAllProjects]);
 
     const navItems = [
         { name: 'Dashboard', path: '/dashboard', icon: FileText },

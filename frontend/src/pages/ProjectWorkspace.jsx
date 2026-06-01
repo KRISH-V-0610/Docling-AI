@@ -7,6 +7,7 @@ import { Button, cn } from '../components/Button';
 import { useToast } from '../components/Toasts';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import useProjectStore from '../store/useProjectStore';
+import { useRenameProject, useDeleteProject } from '../hooks/queries/useProjectQueries';
 import useAppStore from '../store/useAppStore';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
@@ -38,7 +39,9 @@ export function ProjectWorkspace() {
     const [editingFileId, setEditingFileId] = useState(null);
     const [editingFileName, setEditingFileName] = useState('');
 
-    const { renameProject, deleteProject, recordVisit } = useProjectStore();
+    const recordVisit = useProjectStore((s) => s.recordVisit);
+    const renameProject = useRenameProject();
+    const deleteProject = useDeleteProject();
     const { toast, confirm } = useToast();
     const { latexContent, setLatexContent, targetStyle, setTargetStyle, customRules, setCustomRules, llmEngine, setLlmEngine, setDeepScanProjectId, setDeepScanSourceFileName } = useAppStore();
     const fileInputRef = useRef(null);
@@ -181,11 +184,11 @@ export function ProjectWorkspace() {
             setIsEditingProject(false);
             return;
         }
-        const success = await renameProject(id, editingProjectTitle);
-        if (success) {
+        try {
+            await renameProject.mutateAsync({ id, title: editingProjectTitle });
             setProject(prev => ({ ...prev, title: editingProjectTitle }));
             toast({ title: 'Project Renamed', variant: 'success' });
-        } else {
+        } catch {
             toast({ title: 'Rename failed', variant: 'error' });
         }
         setIsEditingProject(false);
@@ -197,11 +200,11 @@ export function ProjectWorkspace() {
             description: "Are you sure you want to permanently delete this entire project? This action cannot be undone.",
             confirmText: "Delete Project",
             onConfirm: async () => {
-                const success = await deleteProject(id);
-                if (success) {
+                try {
+                    await deleteProject.mutateAsync(id);
                     toast({ title: 'Project Deleted', variant: 'success' });
                     navigate('/dashboard');
-                } else {
+                } catch {
                     toast({ title: 'Deletion failed', variant: 'error' });
                 }
             }
