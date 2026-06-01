@@ -70,6 +70,7 @@ export function authHeaders(extra = {}) {
 import axios from 'axios';
 
 let _axiosInterceptorInstalled = false;
+
 function _installAxiosInterceptor() {
   if (_axiosInterceptorInstalled) return;
   _axiosInterceptorInstalled = true;

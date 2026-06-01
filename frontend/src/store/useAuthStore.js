@@ -1,44 +1,40 @@
 import { create } from 'zustand';
-import axios from 'axios';
-import { ENDPOINTS } from '../config/api';
+import { authService } from '../services';
 
-const API_URL = ENDPOINTS.auth;
-
-const useAuthStore = create((set, get) => ({
+// Auth session state (client state — stays in Zustand). All network I/O goes
+// through authService; errors arrive pre-normalized as { message, status }.
+const useAuthStore = create((set) => ({
     user: null,
     isAuthenticated: false,
     status: 'idle', // 'idle' | 'loading' | 'error' | 'success'
     errorMessage: null,
 
-    // Initialize state from local storage token
+    // Initialize state from a stored token.
     checkAuth: async () => {
         const token = localStorage.getItem('token');
         if (!token) {
             set({ isAuthenticated: false, user: null, status: 'idle' });
             return;
         }
-
         set({ status: 'loading', errorMessage: null });
         try {
-            const res = await axios.get(`${API_URL}/profile`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            set({ user: res.data, isAuthenticated: true, status: 'success' });
+            const user = await authService.getProfile();
+            set({ user, isAuthenticated: true, status: 'success' });
         } catch (error) {
             localStorage.removeItem('token');
-            set({ user: null, isAuthenticated: false, status: 'error', errorMessage: error.response?.data?.error || 'Session expired' });
+            set({ user: null, isAuthenticated: false, status: 'error', errorMessage: error.message });
         }
     },
 
     login: async (email, password) => {
         set({ status: 'loading', errorMessage: null });
         try {
-            const res = await axios.post(`${API_URL}/login`, { email, password });
-            localStorage.setItem('token', res.data.token);
-            set({ user: res.data, isAuthenticated: true, status: 'success' });
+            const data = await authService.login(email, password);
+            localStorage.setItem('token', data.token);
+            set({ user: data.user || data, isAuthenticated: true, status: 'success' });
             return true;
         } catch (error) {
-            set({ status: 'error', errorMessage: error.response?.data?.error || 'Login failed' });
+            set({ status: 'error', errorMessage: error.message });
             return false;
         }
     },
@@ -46,12 +42,12 @@ const useAuthStore = create((set, get) => ({
     signup: async (username, email, password) => {
         set({ status: 'loading', errorMessage: null });
         try {
-            const res = await axios.post(`${API_URL}/signup`, { username, email, password });
-            localStorage.setItem('token', res.data.token);
-            set({ user: res.data, isAuthenticated: true, status: 'success' });
+            const data = await authService.signup(username, email, password);
+            localStorage.setItem('token', data.token);
+            set({ user: data.user || data, isAuthenticated: true, status: 'success' });
             return true;
         } catch (error) {
-            set({ status: 'error', errorMessage: error.response?.data?.error || 'Signup failed' });
+            set({ status: 'error', errorMessage: error.message });
             return false;
         }
     },
@@ -62,26 +58,14 @@ const useAuthStore = create((set, get) => ({
     },
 
     updateProfilePic: async (file) => {
-        const token = localStorage.getItem('token');
-        if (!token) return false;
-
+        if (!localStorage.getItem('token')) return false;
         set({ status: 'loading', errorMessage: null });
         try {
-            const formData = new FormData();
-            formData.append('profileImage', file);
-
-            const res = await axios.put(`${API_URL}/profile/picture`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                    Authorization: `Bearer ${token}`
-                }
-            });
-
-            // Update the user state with new profile picture
-            set({ user: res.data, status: 'success' });
+            const user = await authService.updateProfilePic(file);
+            set({ user, status: 'success' });
             return true;
         } catch (error) {
-            set({ status: 'error', errorMessage: error.response?.data?.error || 'Failed to update profile picture' });
+            set({ status: 'error', errorMessage: error.message });
             return false;
         }
     },

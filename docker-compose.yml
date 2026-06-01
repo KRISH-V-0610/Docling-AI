@@ -35,6 +35,16 @@ services:
       - backend
       - backend_ai
 
+  # ── Dozzle — real-time log viewer (dev only, remove before production) ────────
+  # Visit http://localhost:9999 to stream logs from all containers in your browser.
+  dozzle:
+    image: amir20/dozzle:latest
+    restart: unless-stopped
+    ports:
+      - "9999:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
   mongo:
     image: mongo:7
     restart: unless-stopped
