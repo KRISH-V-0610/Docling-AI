@@ -1,61 +1,59 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { motion } from 'framer-motion';
 import { User, Mail, Lock, LogIn, UserPlus, FileText } from 'lucide-react';
 import { Button } from '../components/Button';
+import { FormField } from '../components/ui/FormField';
 import useAuthStore from '../store/useAuthStore';
 import { useToast } from '../components/Toasts';
 import { useNavigate } from 'react-router-dom';
+import { loginFormSchema, signupFormSchema } from '../schemas';
 
 export function Auth() {
     const [isLogin, setIsLogin] = useState(true);
-    const { login, signup, status, errorMessage, clearError } = useAuthStore();
+    const { login, signup, status, clearError } = useAuthStore();
     const { toast } = useToast();
     const navigate = useNavigate();
 
-    const [formData, setFormData] = useState({
-        username: '',
-        email: '',
-        password: '',
-        confirmPassword: ''
+    // react-hook-form + Zod (B1). The resolver enforces email format, password
+    // length, and (signup) confirm-match — inline per field, no validation toasts.
+    const {
+        register,
+        handleSubmit,
+        reset,
+        formState: { errors },
+    } = useForm({
+        resolver: zodResolver(isLogin ? loginFormSchema : signupFormSchema),
+        mode: 'onTouched',
     });
 
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-        if (errorMessage) clearError();
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-
-        if (!isLogin) {
-            if (formData.password !== formData.confirmPassword) {
-                toast({ title: 'Error', description: 'Passwords do not match', variant: 'error' });
-                return;
-            }
-            if (formData.password.length < 6) {
-                toast({ title: 'Error', description: 'Password must be at least 6 characters', variant: 'error' });
-                return;
-            }
-        }
-
+    const onSubmit = async (data) => {
         const success = isLogin
-            ? await login(formData.email, formData.password)
-            : await signup(formData.username, formData.email, formData.password);
+            ? await login(data.email, data.password)
+            : await signup(data.username, data.email, data.password);
 
         if (success) {
             toast({
                 title: 'Success!',
                 description: isLogin ? 'Welcome back!' : 'Account created successfully!',
-                variant: 'success'
+                variant: 'success',
             });
             navigate('/');
         } else {
+            // Server-side failure (bad creds, duplicate email, etc.) — still a toast.
             toast({
                 title: 'Authentication Failed',
                 description: useAuthStore.getState().errorMessage || 'Something went wrong.',
-                variant: 'error'
+                variant: 'error',
             });
         }
+    };
+
+    const switchMode = () => {
+        setIsLogin((v) => !v);
+        clearError();
+        reset(); // clear fields + validation state when toggling login/signup
     };
 
     return (
@@ -68,7 +66,7 @@ export function Auth() {
                 {/* Visual Side (Left Half) */}
                 <div className="hidden md:flex flex-col w-1/2 bg-[var(--color-primary-600)] justify-center items-center p-12 text-white relative overflow-hidden">
                     <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_var(--color-primary-500)_0%,_transparent_100%)]"></div>
-                    <div className="relative z-10text-center flex flex-col items-center">
+                    <div className="relative z-10 text-center flex flex-col items-center">
                         <FileText className="w-16 h-16 text-[var(--color-primary-100)] mb-6" />
                         <h2 className="text-4xl font-anton font-normal tracking-wide text-[var(--color-primary-50)] mb-4">
                             {isLogin ? "Welcome Back to Docling!" : "Join Docling Today!"}
@@ -93,85 +91,46 @@ export function Auth() {
                             </p>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        {/* key={isLogin} re-mounts the form so the resolver swaps cleanly on toggle */}
+                        <form key={isLogin ? 'login' : 'signup'} onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
                             {!isLogin && (
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium text-[var(--color-text-main)]">Username</label>
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <User className="h-5 w-5 text-[var(--color-text-muted)]" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            name="username"
-                                            value={formData.username}
-                                            onChange={handleChange}
-                                            required={!isLogin}
-                                            className="w-full pl-10 pr-4 py-2 bg-[var(--color-surface-100)] border border-[var(--color-surface-300)] rounded-[var(--radius-lg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)] text-[var(--color-text-main)]"
-                                            placeholder="johndoe"
-                                        />
-                                    </div>
-                                </div>
+                                <FormField
+                                    label="Username"
+                                    icon={User}
+                                    type="text"
+                                    placeholder="johndoe"
+                                    error={errors.username?.message}
+                                    {...register('username')}
+                                />
                             )}
 
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium text-[var(--color-text-main)]">Email Address</label>
-                                <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Mail className="h-5 w-5 text-[var(--color-text-muted)]" />
-                                    </div>
-                                    <input
-                                        type="email"
-                                        name="email"
-                                        value={formData.email}
-                                        onChange={handleChange}
-                                        required
-                                        className="w-full pl-10 pr-4 py-2 bg-[var(--color-surface-100)] border border-[var(--color-surface-300)] rounded-[var(--radius-lg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)] text-[var(--color-text-main)]"
-                                        placeholder="you@example.com"
-                                    />
-                                </div>
-                            </div>
+                            <FormField
+                                label="Email Address"
+                                icon={Mail}
+                                type="email"
+                                placeholder="you@example.com"
+                                error={errors.email?.message}
+                                {...register('email')}
+                            />
 
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium text-[var(--color-text-main)]">Password</label>
-                                <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Lock className="h-5 w-5 text-[var(--color-text-muted)]" />
-                                    </div>
-                                    <input
-                                        type="password"
-                                        name="password"
-                                        value={formData.password}
-                                        onChange={handleChange}
-                                        required
-                                        className="w-full pl-10 pr-4 py-2 bg-[var(--color-surface-100)] border border-[var(--color-surface-300)] rounded-[var(--radius-lg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)] text-[var(--color-text-main)]"
-                                        placeholder="••••••••"
-                                    />
-                                </div>
-                            </div>
+                            <FormField
+                                label="Password"
+                                icon={Lock}
+                                type="password"
+                                placeholder="••••••••"
+                                error={errors.password?.message}
+                                {...register('password')}
+                            />
 
                             {!isLogin && (
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium text-[var(--color-text-main)]">Confirm Password</label>
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <Lock className="h-5 w-5 text-[var(--color-text-muted)]" />
-                                        </div>
-                                        <input
-                                            type="password"
-                                            name="confirmPassword"
-                                            value={formData.confirmPassword}
-                                            onChange={handleChange}
-                                            required={!isLogin}
-                                            className="w-full pl-10 pr-4 py-2 bg-[var(--color-surface-100)] border border-[var(--color-surface-300)] rounded-[var(--radius-lg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)] text-[var(--color-text-main)]"
-                                            placeholder="••••••••"
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {errorMessage && (
-                                <p className="text-red-500 text-sm font-medium text-center">{errorMessage}</p>
+                                <FormField
+                                    label="Confirm Password"
+                                    icon={Lock}
+                                    type="password"
+                                    placeholder="••••••••"
+                                    error={errors.confirmPassword?.message}
+                                    {...register('confirmPassword')}
+                                />
                             )}
 
                             <Button type="submit" className="w-full mt-6 py-6" disabled={status === 'loading'}>
@@ -196,11 +155,7 @@ export function Auth() {
                             <p className="text-sm text-[var(--color-text-muted)]">
                                 {isLogin ? "Don't have an account?" : "Already have an account?"}
                                 <button
-                                    onClick={() => {
-                                        setIsLogin(!isLogin);
-                                        clearError();
-                                        setFormData({ username: '', email: '', password: '', confirmPassword: '' });
-                                    }}
+                                    onClick={switchMode}
                                     className="ml-2 font-medium text-[var(--color-primary-600)] hover:text-[var(--color-primary-900)] transition-colors"
                                 >
                                     {isLogin ? 'Sign up' : 'Sign in'}
@@ -213,3 +168,5 @@ export function Auth() {
         </div>
     );
 }
+
+export default Auth;
