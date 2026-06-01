@@ -1,23 +1,29 @@
-import React, { useState } from 'react';
-import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import React, { useState, lazy, Suspense } from 'react';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { ToastProvider } from './components/Toasts';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import ChatBot from './components/ChatBot';
-
-// Pages
-import { Dashboard } from './pages/Dashboard';
-import { Auth } from './pages/Auth';
-import { Profile } from './pages/Profile';
-import { Landing } from './pages/Landing';
-import { History } from './pages/History';
-import { ProjectWorkspace } from './pages/ProjectWorkspace';
-import { AdvanceWorkspace } from './pages/AdvanceWorkspace';
-import { DeepScan } from './pages/DeepScan';
-import { Integrations } from './pages/Integrations';
-import { Workflows } from './pages/Workflows';
-import LatexToolkit from './pages/LatexToolkit';
 import useAuthStore from './store/useAuthStore';
+
+// ── Code-splitting (Track A5) ────────────────────────────────────────────────
+// Each page is lazy-loaded so its JS (and heavy deps like Monaco, Quill, the
+// 3D/markdown libs) only downloads when the user navigates to that route. This
+// shrinks the initial bundle dramatically. Public/landing pages stay eager so
+// first paint is instant.
+import { Landing } from './pages/Landing';
+import { Auth } from './pages/Auth';
+
+const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
+const History = lazy(() => import('./pages/History').then(m => ({ default: m.History })));
+const ProjectWorkspace = lazy(() => import('./pages/ProjectWorkspace').then(m => ({ default: m.ProjectWorkspace })));
+const AdvanceWorkspace = lazy(() => import('./pages/AdvanceWorkspace').then(m => ({ default: m.AdvanceWorkspace })));
+const DeepScan = lazy(() => import('./pages/DeepScan').then(m => ({ default: m.DeepScan })));
+const Integrations = lazy(() => import('./pages/Integrations').then(m => ({ default: m.Integrations })));
+const Workflows = lazy(() => import('./pages/Workflows').then(m => ({ default: m.Workflows })));
+const LatexToolkit = lazy(() => import('./pages/LatexToolkit')); // default export
 
 function PlaceholderPage({ title }) {
   return (
@@ -26,6 +32,18 @@ function PlaceholderPage({ title }) {
         <h2 className="text-2xl font-bold text-[var(--color-text-main)] mb-2">{title}</h2>
         <p className="text-[var(--color-text-muted)]">This page is under construction.</p>
       </div>
+    </div>
+  );
+}
+
+// Fallback shown while a lazy route's chunk is downloading.
+function RouteLoader() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <svg className="animate-spin h-8 w-8 text-[var(--color-primary-500)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
     </div>
   );
 }
@@ -52,7 +70,9 @@ const ProtectedRoute = () => {
   return isAuthenticated ? <Outlet /> : <Navigate to="/" replace />;
 };
 
-// Main layout for logged-in users (Sidebar + Navbar)
+// Main layout for logged-in users (Sidebar + Navbar). Each route element is
+// wrapped in an ErrorBoundary + Suspense so a crash or slow chunk in one page
+// never takes down the shell (nav stays usable).
 function AuthenticatedLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -67,7 +87,11 @@ function AuthenticatedLayout() {
         <Navbar />
 
         <main className="flex-1 overflow-y-auto w-full p-4 md:p-8">
-          <Outlet />
+          <ErrorBoundary>
+            <Suspense fallback={<RouteLoader />}>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
     </div>

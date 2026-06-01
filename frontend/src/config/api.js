@@ -15,9 +15,13 @@ const fromEnv = (key, fallback) => {
   return v && v.trim() ? v.trim().replace(/\/+$/, '') : fallback;
 };
 
-// The single public origin — the NGINX proxy. (VITE_EXPRESS_URL is accepted as
-// a legacy fallback so older .env files keep working.)
-const BASE = fromEnv('VITE_API_URL', fromEnv('VITE_EXPRESS_URL', 'http://localhost:80'));
+// The single public origin — the NGINX proxy.
+//   Dev (no .env.local needed): empty string → relative URLs (/api/auth etc.).
+//     Vite proxy intercepts /api/* → http://localhost:80 so the browser never
+//     makes a cross-origin request → zero CORS issues during development.
+//   Prod: set VITE_API_URL=https://api.yourdomain.com in your build environment.
+//   Legacy: VITE_EXPRESS_URL still accepted so older .env files keep working.
+const BASE = fromEnv('VITE_API_URL', fromEnv('VITE_EXPRESS_URL', ''));
 
 export const API = { BASE };
 

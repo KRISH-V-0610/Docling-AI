@@ -6,14 +6,16 @@
 #   - backend_ai    (Python/FastAPI, :8000) — chatbot, deepscan,   [internal only]
 #                    file-editor, toolkit (one app, many routers)
 #
-# Only nginx (:80) and mongo (:27017, dev convenience) are published to the host.
-# The backends are reachable ONLY from inside the Docker network, via nginx.
+# Only nginx (:80) and mongo (:27017 dev convenience) are published to the host.
+# backend and backend_ai are internal-only — reachable only inside Docker via NGINX.
+# This is the production security posture: one public door.
 #
 # Boot everything:
 #     docker compose up --build
 #
-# Frontend (Vite) runs locally for HMR — `cd frontend && npm run dev` — and
-# points at nginx (VITE_API_URL=http://localhost:80).
+# Frontend (Vite) runs locally for HMR — `cd frontend && npm run dev`.
+# The Vite dev proxy forwards /api/* → http://localhost:80 (NGINX), so run
+# docker compose first and then npm run dev.
 #
 # Notes:
 #  * Persistent SQLite/data lives bind-mounted under backend_ai/data/.
@@ -72,7 +74,7 @@ services:
     volumes:
       - ./backend:/app                   # live-reload: code changes reflect instantly
       - express-node-modules:/app/node_modules
-    # No `ports:` — Express is internal-only. nginx reaches it at backend:3000.
+    # No ports — Express is internal-only. NGINX reaches it at backend:3000.
     depends_on:
       mongo:
         condition: service_healthy
@@ -97,12 +99,7 @@ services:
     volumes:
       - ./:/repo                         # live-reload: code changes reflect instantly
       - tectonic-cache:/root/.cache/Tectonic  # cache TeX packages across restarts
-    # Port 8000 is NOT published to the host. FastAPI is reachable only by other
-    # Docker services on the internal network (e.g. backend → backend_ai:8000).
-    # All external traffic enters via Express on port 3000.
-    # To debug FastAPI directly during development, temporarily add:
-    #   ports:
-    #     - "8000:8000"
+    # No ports — FastAPI is internal-only. NGINX reaches it at backend_ai:8000.
 
 volumes:
   mongo-data:
