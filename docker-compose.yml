@@ -1,24 +1,39 @@
 # =============================================================================
 # HackaMineD / Docling AI — dev orchestration
 # =============================================================================
-# Two backend processes total:  
-#   - backend       (Node/Express, port 3000) — auth, projects, files, LaTeX
-#   - backend_ai    (Python/FastAPI, port 8000) — chatbot + reconstruct +
-#                   deepscan + file-editor + readme-gen (one app, four routers)
+# NGINX is the SINGLE public entry point (port 80). It reverse-proxies to:
+#   - backend       (Node/Express, :3000) — auth, projects        [internal only]
+#   - backend_ai    (Python/FastAPI, :8000) — chatbot, deepscan,   [internal only]
+#                    file-editor, toolkit (one app, many routers)
+#
+# Only nginx (:80) and mongo (:27017, dev convenience) are published to the host.
+# The backends are reachable ONLY from inside the Docker network, via nginx.
 #
 # Boot everything:
 #     docker compose up --build
 #
-# Frontend (Vite) runs locally for HMR — `cd frontend && npm run dev`.
+# Frontend (Vite) runs locally for HMR — `cd frontend && npm run dev` — and
+# points at nginx (VITE_API_URL=http://localhost:80).
 #
 # Notes:
-#  * Runtime pip-install keeps the repo edit-friendly. Production Dockerfiles
-#    can come later.
 #  * Persistent SQLite/data lives bind-mounted under backend_ai/data/.
 #  * Required secrets read from a repo-root .env file (see .env.example).
 # =============================================================================
 
 services:
+
+  # ── Reverse proxy — the only publicly exposed service ──────────────────────
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      # Mount our config read-only over NGINX's default site config.
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - backend_ai
 
   mongo:
     image: mongo:7
@@ -47,8 +62,7 @@ services:
     volumes:
       - ./backend:/app                   # live-reload: code changes reflect instantly
       - express-node-modules:/app/node_modules
-    ports:
-      - "3000:3000"
+    # No `ports:` — Express is internal-only. nginx reaches it at backend:3000.
     depends_on:
       mongo:
         condition: service_healthy
@@ -73,8 +87,12 @@ services:
     volumes:
       - ./:/repo                         # live-reload: code changes reflect instantly
       - tectonic-cache:/root/.cache/Tectonic  # cache TeX packages across restarts
-    ports:
-      - "8000:8000"
+    # Port 8000 is NOT published to the host. FastAPI is reachable only by other
+    # Docker services on the internal network (e.g. backend → backend_ai:8000).
+    # All external traffic enters via Express on port 3000.
+    # To debug FastAPI directly during development, temporarily add:
+    #   ports:
+    #     - "8000:8000"
 
 volumes:
   mongo-data:

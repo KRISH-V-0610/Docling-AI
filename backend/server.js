@@ -10,12 +10,12 @@ dotenv.config();
 
 const app = express();
 
-app.use(express.json()); // allows us to parse incoming requests:req.body
 app.use(cors());
+app.use(express.json()); // allows us to parse incoming requests:req.body
 
-
-// LaTeX compilation is handled by the Python backend (tectonic). The old
-// Express → texlive.net proxy has been removed (no external compile fallback).
+// AI traffic (/api/ai/*) is routed to FastAPI by NGINX (see nginx/default.conf),
+// not by Express — so this service only owns auth + projects. LaTeX compilation
+// is handled by the Python backend (tectonic).
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
 

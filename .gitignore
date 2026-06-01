@@ -47,6 +47,9 @@ yarn-error.log*
 .gemini/
 .agents/
 
+# Local planning docs (not for version control)
+PRODUCTION_ROADMAP.md
+
 # SQLite databases (runtime data — not source code)
 *.db
 *.sqlite

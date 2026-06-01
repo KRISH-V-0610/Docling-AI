@@ -1,8 +1,13 @@
 // =====================================================================
-// Central backend URL configuration (Phase 1 consolidation).
+// Central backend URL configuration (Phase E.2 — NGINX single origin).
 //
-// One source of truth for every backend the SPA talks to. Override any
-// of these with Vite env vars at build/dev time — see frontend/.env.example.
+// Every request goes to ONE origin: the NGINX reverse proxy. NGINX routes
+// /api/auth + /api/projects → Express, and /api/ai/* → FastAPI, internally.
+// The SPA never knows (or needs to know) there are two backends.
+//
+// Set VITE_API_URL to wherever NGINX is reachable:
+//   • local dev:  http://localhost:80   (the compose nginx service)
+//   • production: https://api.yourdomain.com
 // =====================================================================
 
 const fromEnv = (key, fallback) => {
@@ -10,30 +15,30 @@ const fromEnv = (key, fallback) => {
   return v && v.trim() ? v.trim().replace(/\/+$/, '') : fallback;
 };
 
-// Service roots. After Phase 2.5 there are only two backends total — Express
-// (auth/projects/files) and a unified Python AI service that hosts chatbot,
-// reconstruct pipeline, deep-scan, file-editor, and the README generator.
-export const API = {
-  EXPRESS:   fromEnv('VITE_EXPRESS_URL',   'http://localhost:3000'),
-  PYTHON_AI: fromEnv('VITE_PYTHON_AI_URL', 'http://127.0.0.1:8000'),
-};
+// The single public origin — the NGINX proxy. (VITE_EXPRESS_URL is accepted as
+// a legacy fallback so older .env files keep working.)
+const BASE = fromEnv('VITE_API_URL', fromEnv('VITE_EXPRESS_URL', 'http://localhost:80'));
 
-// Endpoint roots — what callers actually import.
+export const API = { BASE };
+
+// AI routes live under /api/ai/* (NGINX strips that prefix before FastAPI).
+const AI_ROOT = `${BASE}/api/ai`;
+
+// Endpoint roots — what callers actually import. All hang off the one origin.
 export const ENDPOINTS = {
-  auth:         `${API.EXPRESS}/api/auth`,
-  projects:     `${API.EXPRESS}/api/projects`,
+  auth:         `${BASE}/api/auth`,
+  projects:     `${BASE}/api/projects`,
 
-  // Python AI unified service mounts:
+  // AI service mounts (NGINX → FastAPI):
   //   /api/v2/ask                       → Dockyyy chatbot
   //   /deepscan/api/v2/pipeline/stream  → deep-scan (core document→LaTeX engine)
   //   /files/...                        → DocBot DOCX editor agent
-  chatbot:        `${API.PYTHON_AI}/api/v2`,
-  deepScan:       `${API.PYTHON_AI}/deepscan`,
-  deepScanCompile:`${API.PYTHON_AI}/deepscan/api/v2/compile`,
-  fileEditor:     `${API.PYTHON_AI}/files`,
-
-  //   /toolkit/...  → LaTeX Toolkit (Phase H): table/equation/bibtex/convert/export/chat
-  toolkit:        `${API.PYTHON_AI}/toolkit`,
+  //   /toolkit/...                      → LaTeX Toolkit (Phase H)
+  chatbot:        `${AI_ROOT}/api/v2`,
+  deepScan:       `${AI_ROOT}/deepscan`,
+  deepScanCompile:`${AI_ROOT}/deepscan/api/v2/compile`,
+  fileEditor:     `${AI_ROOT}/files`,
+  toolkit:        `${AI_ROOT}/toolkit`,
 };
 
 // =====================================================================
