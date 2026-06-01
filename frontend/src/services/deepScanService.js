@@ -21,6 +21,16 @@ export const deepScanService = {
     return fd;
   },
 
+  /** Build { url, init } for useSSE().start() — POST multipart + Bearer auth. */
+  pipelineStreamArgs: (file, { style, model }) => ({
+    url: `${BASE}/api/v2/pipeline/stream`,
+    init: {
+      method: 'POST',
+      headers: authHeaders(),
+      body: deepScanService.buildPipelineForm(file, { style, model }),
+    },
+  }),
+
   /**
    * Compile LaTeX → PDF. Returns { ok, blob } on success or { ok:false, error,
    * notes } on failure. Uses fetch because the response is either a PDF blob or

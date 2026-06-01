@@ -6,7 +6,7 @@
  * Self-contained: uses useDeepScanStore (isolated from main app store).
  * Backend: unified backend_ai service (port 8000), /deepscan sub-router.
  */
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Upload, Settings, Play, Code2, Bot, ChevronRight, ChevronLeft,
@@ -17,6 +17,8 @@ import MonacoEditor from '@monaco-editor/react';
 import * as docx from 'docx-preview';
 import useDeepScanStore from '../store/useDeepScanStore';
 import { ENDPOINTS, authHeaders } from '../config/api';
+import { useSSE } from '../hooks/useSSE';
+import { deepScanService } from '../services';
 
 const PIPELINE_API = ENDPOINTS.deepScan;
 
@@ -262,10 +264,50 @@ function ProcessStep() {
 
   const logRef = useRef(null);
   const started = useRef(false);
+  const logCount = useRef(0);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [processLogs]);
+
+  // Handle one parsed SSE event from the pipeline (the per-event business logic
+  // that used to live inside the inline fetch loop).
+  const handleEvent = useCallback((payload) => {
+    if (payload.error) {
+      addProcessLog({ time: now(), message: `Error: ${payload.error}` });
+      setIsProcessingDone(true);
+      return;
+    }
+    if (payload.stage) setCurrentStage(payload.stage);
+    if (payload.log) {
+      addProcessLog({ time: now(), message: payload.log });
+      logCount.current++;
+      if (payload.stage === 1) setProcessingProgress(Math.min(60, logCount.current * 5));
+      else if (payload.stage === 2) setProcessingProgress(Math.min(95, 60 + (logCount.current - 12) * 4));
+    }
+    if (payload.stage_complete === 1) setProcessingProgress(60);
+    if (payload.compliance_score != null) setComplianceScore(payload.compliance_score);
+    if (payload.formatted_file) setFormattedFile(payload.formatted_file);
+    if (payload.integrity) setIntegrityReport(payload.integrity);
+    if (payload.is_final) {
+      if (payload.latex) setLatexContent(payload.latex);
+      if (payload.assets) setAssets(payload.assets, payload.assets_base, payload.job);
+      if (Array.isArray(payload.missing_figures)) setMissingFigures(payload.missing_figures);
+      setProcessingProgress(100);
+      setIsProcessingDone(true);
+    }
+  }, [addProcessLog, setCurrentStage, setProcessingProgress, setComplianceScore,
+      setFormattedFile, setIntegrityReport, setLatexContent, setAssets,
+      setMissingFigures, setIsProcessingDone]);
+
+  const { start } = useSSE({
+    onEvent: handleEvent,
+    onDone: () => setIsProcessingDone(true),
+    onError: (err) => {
+      addProcessLog({ time: now(), message: `Connection error: ${err.message}` });
+      setIsProcessingDone(true);
+    },
+  });
 
   useEffect(() => {
     if (started.current) return;
@@ -274,6 +316,7 @@ function ProcessStep() {
     setProcessingProgress(0);
     setCurrentStage(0);
     setIsProcessingDone(false);
+    logCount.current = 0;
 
     if (!uploadedFile) {
       addProcessLog({ time: now(), message: 'Error: No file uploaded. Go back.' });
@@ -281,76 +324,13 @@ function ProcessStep() {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', uploadedFile, uploadedFile.name);
-    formData.append('style', targetStyle);
-    formData.append('model', llmModel);
-
     addProcessLog({ time: now(), message: 'Starting static formatting engine...' });
     addProcessLog({ time: now(), message: `Style: ${targetStyle} | File: ${uploadedFile.name}` });
 
-    let logCount = 0;
-
-    fetch(`${PIPELINE_API}/api/v2/pipeline/stream`, { method: 'POST', headers: authHeaders(), body: formData })
-      .then(async (response) => {
-        if (!response.body) throw new Error('ReadableStream not supported');
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        let buffer = '';
-        let done = false;
-
-        while (!done) {
-          const { value, done: readerDone } = await reader.read();
-          done = readerDone;
-          if (value) buffer += decoder.decode(value, { stream: true });
-
-          const chunks = buffer.split('\n\n');
-          buffer = chunks.pop();
-
-          for (const chunk of chunks) {
-            if (!chunk.trim() || !chunk.startsWith('data: ')) continue;
-            try {
-              const payload = JSON.parse(chunk.substring(6));
-              console.log('Deep Scan Pipeline:', payload);
-
-              if (payload.stage) setCurrentStage(payload.stage);
-              if (payload.log) {
-                addProcessLog({ time: now(), message: payload.log });
-                logCount++;
-                if (payload.stage === 1) setProcessingProgress(Math.min(60, logCount * 5));
-                else if (payload.stage === 2) setProcessingProgress(Math.min(95, 60 + (logCount - 12) * 4));
-              }
-              if (payload.stage_complete === 1) setProcessingProgress(60);
-              if (payload.compliance_score != null) setComplianceScore(payload.compliance_score);
-              if (payload.formatted_file) setFormattedFile(payload.formatted_file);
-              if (payload.integrity) setIntegrityReport(payload.integrity);
-              if (payload.is_final) {
-                if (payload.latex) setLatexContent(payload.latex);
-                if (payload.formatted_file) setFormattedFile(payload.formatted_file);
-                if (payload.integrity) setIntegrityReport(payload.integrity);
-                if (payload.assets) setAssets(payload.assets, payload.assets_base, payload.job);
-                if (Array.isArray(payload.missing_figures)) setMissingFigures(payload.missing_figures);
-                setProcessingProgress(100);
-                setIsProcessingDone(true);
-                return;
-              }
-              if (payload.error) throw new Error(payload.error);
-            } catch (e) {
-              if (e.message && !e.message.includes('JSON')) {
-                addProcessLog({ time: now(), message: `Error: ${e.message}` });
-                setIsProcessingDone(true);
-                return;
-              }
-            }
-          }
-        }
-        setIsProcessingDone(true);
-      })
-      .catch((err) => {
-        addProcessLog({ time: now(), message: `Connection error: ${err.message}` });
-        setIsProcessingDone(true);
-      });
-  }, []);
+    const { url, init } = deepScanService.pipelineStreamArgs(uploadedFile, { style: targetStyle, model: llmModel });
+    start(url, init);
+    // useSSE aborts the stream automatically on unmount (no leak).
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stageLabel = currentStage >= 2
     ? 'Stage 2: LLM-based LaTeX generation'
