@@ -14,6 +14,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { ENDPOINTS, authHeaders } from '../config/api';
+import { PageMeta } from '../components/PageMeta';
 
 // ── Small helpers ──────────────────────────────────────────────
 
@@ -399,6 +400,7 @@ export default function LatexToolkit() {
 
   return (
     <div className="min-h-screen bg-slate-950 p-6 text-slate-100">
+      <PageMeta title="LaTeX Toolkit" description="Convert Word/PDF to LaTeX, build tables and equations, generate BibTeX, and export — all in one workbench." />
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex items-center gap-3">
           <div className="rounded-xl bg-indigo-600/20 p-2.5 text-indigo-300"><Wrench size={22} /></div>

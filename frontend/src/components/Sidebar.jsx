@@ -239,6 +239,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                                 isAppProcessing && "opacity-50 cursor-not-allowed pointer-events-none grayscale"
                             )}
                             title="Log Out"
+                            aria-label="Log out"
                         >
                             <LogOut className="w-5 h-5 shrink-0" />
                         </button>
@@ -262,6 +263,8 @@ export function Sidebar({ isOpen, toggleSidebar }) {
 
                 <button
                     onClick={toggleSidebar}
+                    aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+                    aria-expanded={isOpen}
                     className="flex w-full items-center justify-center rounded-[var(--radius-md)] p-2 text-white/70 hover:bg-white/10 hover:text-white transition-colors mt-2"
                 >
                     {isOpen ? <ChevronLeft className="h-6 w-6" /> : <ChevronRight className="h-6 w-6" />}

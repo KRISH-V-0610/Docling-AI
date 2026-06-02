@@ -8,6 +8,7 @@
  * constants. State is the isolated useDeepScanStore.
  */
 import useDeepScanStore from '../store/useDeepScanStore';
+import { PageMeta } from '../components/PageMeta';
 import { SidebarNav } from './deep-scan/StepNav';
 import { UploadStep } from './deep-scan/UploadStep';
 import { ConfigureStep } from './deep-scan/ConfigureStep';
@@ -22,6 +23,7 @@ export function DeepScan() {
 
   return (
     <div className="flex h-[calc(100vh-80px)] rounded-2xl overflow-hidden border border-[var(--color-surface-200)] shadow-lg bg-[var(--color-surface-50)]">
+      <PageMeta title="Deep Scan" description="AI pipeline that reformats your manuscript to a target journal style and compiles it to PDF." />
       <SidebarNav currentStep={currentStep} onStepClick={setStep} disabled={currentStep === 3 && !isProcessingDone} />
       <div className="flex-1 flex flex-col overflow-hidden bg-[var(--color-surface-50)]">
         <div className="flex-1 overflow-y-auto p-8 scroll-smooth hide-scrollbar">

@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
 import { User, Mail, Lock, LogIn, UserPlus, FileText } from 'lucide-react';
 import { Button } from '../components/Button';
+import { PageMeta } from '../components/PageMeta';
 import { FormField } from '../components/ui/FormField';
 import useAuthStore from '../store/useAuthStore';
 import { useToast } from '../components/Toasts';
@@ -58,6 +59,7 @@ export function Auth() {
 
     return (
         <div className="flex w-full min-h-screen">
+            <PageMeta title={isLogin ? 'Sign In' : 'Create Account'} description="Sign in to Docling to format manuscripts and compile LaTeX." />
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}

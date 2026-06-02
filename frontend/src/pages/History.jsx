@@ -5,6 +5,7 @@ import { FolderOpen, Plus, Clock, Trash2 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 import { useProjects, useCreateProject, useDeleteProject } from '../hooks/queries/useProjectQueries';
 import { Button } from '../components/Button';
+import { PageMeta } from '../components/PageMeta';
 import { SkeletonGrid } from '../components/ui/Skeleton';
 import { useToast } from '../components/Toasts';
 
@@ -49,6 +50,7 @@ export function History() {
             animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-7xl mx-auto pb-12 pt-8 px-4 xl:px-8"
         >
+            <PageMeta title="Project History" description="Browse and manage all your Docling workspaces and documents." />
             <div className="flex justify-between items-end mb-10">
                 <div>
                     <h1 className="text-4xl md:text-5xl font-anton font-normal tracking-wide text-[var(--color-text-main)] mb-2">

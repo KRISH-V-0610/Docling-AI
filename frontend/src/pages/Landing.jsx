@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FileText, Code2, ArrowRight, CheckCircle } from 'lucide-react';
 import { Button } from '../components/Button';
+import { PageMeta } from '../components/PageMeta';
 
 export function Landing() {
     const navigate = useNavigate();
 
     return (
         <div className="min-h-screen bg-[var(--color-surface-50)] flex flex-col font-sans overflow-x-hidden">
+            <PageMeta description="Turn messy manuscripts into journal-ready, compilable LaTeX with AI — IEEE, APA, Springer and more." />
 
             {/* Minimal Header */}
             <header className="w-full p-6 flex items-center justify-between z-20 absolute top-0 left-0 right-0">

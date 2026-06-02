@@ -7,6 +7,7 @@ import {
     Trash2
 } from 'lucide-react';
 import { Button } from '../components/Button';
+import { PageMeta } from '../components/PageMeta';
 import { motion } from 'framer-motion';
 import useAuthStore from '../store/useAuthStore';
 import useProjectStore from '../store/useProjectStore';
@@ -57,6 +58,7 @@ export function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-7xl mx-auto pb-12 pt-4 px-4 xl:px-0"
         >
+            <PageMeta title="Dashboard" description="Your projects, recent work, and quick actions in Docling." />
             {/* Header Area */}
             <div className="flex flex-col xl:flex-row gap-8 mb-8">
 
