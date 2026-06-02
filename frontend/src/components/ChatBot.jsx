@@ -62,7 +62,6 @@ const ChatBot = () => {
             if (!res.ok) throw new Error("Failed to fetch from chatbot API");
 
             const data = await res.json();
-            console.log("Chat API Response:", data);
             setMessages((prev) => [
                 ...prev,
                 { text: data.response, sender: 'bot' }

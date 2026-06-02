@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { ENDPOINTS } from '../config/api';
 import { useDocuments } from '../hooks/queries/useDocuments';
+import { useToast } from '../components/Toasts';
 import { DocBotChat } from './advance-workshop/DocBotChat';
 import { DocumentPreview } from './advance-workshop/DocumentPreview';
 import { DocumentLibrary } from './advance-workshop/DocumentLibrary';
@@ -12,11 +13,19 @@ import { DocumentLibrary } from './advance-workshop/DocumentLibrary';
 const API_BASE = ENDPOINTS.fileEditor;
 
 export function AdvanceWorkspace() {
+    const { toast } = useToast();
     /* ── State ── */
     const [sessionId] = useState(() =>
         localStorage.getItem('agentSessionId') || `ui-${Math.random().toString(36).substr(2, 9)}`
     );
-    const { data: docs = [], refetch: refetchDocuments } = useDocuments();
+    const { data: docs = [], refetch: refetchDocuments, isError: docsError } = useDocuments();
+
+    // Surface a doc-list load failure (previously a silent console.error).
+    useEffect(() => {
+        if (docsError) {
+            toast({ title: 'Could not load documents', description: 'Check your connection and try again.', variant: 'error' });
+        }
+    }, [docsError, toast]);
     const [selectedFile, setSelectedFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [deleting, setDeleting] = useState(null);

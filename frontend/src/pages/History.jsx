@@ -5,6 +5,7 @@ import { FolderOpen, Plus, Clock, Trash2 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 import { useProjects, useCreateProject, useDeleteProject } from '../hooks/queries/useProjectQueries';
 import { Button } from '../components/Button';
+import { SkeletonGrid } from '../components/ui/Skeleton';
 import { useToast } from '../components/Toasts';
 
 export function History() {
@@ -68,9 +69,7 @@ export function History() {
             </div>
 
             {isLoading && projects.length === 0 ? (
-                <div className="flex justify-center py-20">
-                    <div className="w-10 h-10 border-4 border-[var(--color-primary-500)] border-t-transparent rounded-full animate-spin"></div>
-                </div>
+                <SkeletonGrid count={8} />
             ) : projects.length === 0 ? (
                 <div className="bg-white rounded-[var(--radius-xl)] p-16 text-center shadow-[var(--shadow-card)] border border-[var(--color-surface-200)] flex flex-col items-center">
                     <div className="w-24 h-24 mb-6 rounded-3xl bg-[var(--color-surface-100)] flex items-center justify-center">

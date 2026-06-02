@@ -175,7 +175,6 @@ async function formatDocument(file, style = "ieee") {
     for (const chunk of buffer.split("\\n\\n")) {
       if (chunk.startsWith("data: ")) {
         const payload = JSON.parse(chunk.slice(6));
-        if (payload.log) console.log(payload.log);
         if (payload.is_final) return payload;
       }
     }
